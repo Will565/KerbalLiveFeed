@@ -22,11 +22,14 @@ namespace KLF
 
 		public bool infoDisplayBig = false;
 
+  
 		public bool chatWindowEnabled = false;
 		public bool chatWindowWide = false;
 
 		public KeyCode guiToggleKey = KeyCode.F7;
 		public KeyCode screenshotKey = KeyCode.F8;
+        public KeyCode chatKey = KeyCode.F9;
+        public KeyCode viewKey = KeyCode.F10;
 
 		[OptionalField(VersionAdded = 1)]
 		public bool smoothScreens = true;
@@ -49,6 +52,9 @@ namespace KLF
 			smoothScreens = true;
 			guiToggleKey = KeyCode.F7;
 			screenshotKey = KeyCode.F8;
+            chatKey = KeyCode.F9;
+            viewKey = KeyCode.F10;
+
 			chatColors = true;
 			showInactiveShips = true;
 			showOtherShips = true;

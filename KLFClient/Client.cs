@@ -499,7 +499,7 @@ abstract class Client
 					String craft_name = line.Substring(KLFCommon.SHARE_CRAFT_COMMAND.Length + 1);
 					byte craft_type = 0;
 					String filename = findCraftFilename(craft_name, ref craft_type);
-
+                    
 					if (filename != null && filename.Length > 0)
 					{
 						try
@@ -623,7 +623,7 @@ abstract class Client
 
 					//Read current game title
 					int current_game_title_length = KLFCommon.intFromBytes(data, index);
-					index += 4;
+                    index += 4;
 
 					currentGameTitle = encoder.GetString(data, index, current_game_title_length);
 					index += current_game_title_length;
@@ -777,8 +777,10 @@ abstract class Client
 	protected String findCraftFilename(String craft_name, ref byte craft_type)
 	{
 		String vab_filename = getCraftFilename(craft_name, KLFCommon.CRAFT_TYPE_VAB);
+        
 		if (vab_filename != null && File.Exists(vab_filename))
 		{
+            
 			craft_type = KLFCommon.CRAFT_TYPE_VAB;
 			return vab_filename;
 		}
@@ -786,6 +788,7 @@ abstract class Client
 		String sph_filename = getCraftFilename(craft_name, KLFCommon.CRAFT_TYPE_SPH);
 		if (sph_filename != null && File.Exists(sph_filename))
 		{
+            
 			craft_type = KLFCommon.CRAFT_TYPE_SPH;
 			return sph_filename;
 		}
@@ -798,19 +801,30 @@ abstract class Client
 	{
 		//Filter the craft name for illegal characters
 		String filtered_craft_name = KLFCommon.filteredFileName(craft_name.Replace('.', '_'));
+        
+        
+        String result="";
 
-		if (currentGameTitle.Length <= 0 || filtered_craft_name.Length <= 0)
-			return null;
+        if (currentGameTitle.Length <= 0 || filtered_craft_name.Length <= 0)
+        {
+          
 
+            return null;
+        }
+        
 		switch (craft_type)
 		{
 			case KLFCommon.CRAFT_TYPE_VAB:
-				return "saves/" + currentGameTitle + "/Ships/VAB/" + filtered_craft_name + CRAFT_FILE_EXTENSION;
+				result= "saves/" + currentGameTitle + "/Ships/VAB/" + filtered_craft_name + CRAFT_FILE_EXTENSION;
+                
+                return result;
 
 			case KLFCommon.CRAFT_TYPE_SPH:
-				return "saves/" + currentGameTitle + "/Ships/SPH/" + filtered_craft_name + CRAFT_FILE_EXTENSION;
+				result= "saves/" + currentGameTitle + "/Ships/SPH/" + filtered_craft_name + CRAFT_FILE_EXTENSION;
+               
+                return result;
 		}
-
+        
 		return null;
 
 	}

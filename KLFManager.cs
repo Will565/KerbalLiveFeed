@@ -77,6 +77,8 @@ namespace KLF
 
 		private bool mappingGUIToggleKey = false;
 		private bool mappingScreenshotKey = false;
+        private bool mappingChatKey = false;
+        private bool mappingViewKey = false;
 
 		public bool globalUIToggle
 		{
@@ -659,11 +661,22 @@ namespace KLF
 			if (HighLogic.CurrentGame != null)
 			{
 				current_game_title = HighLogic.CurrentGame.Title;
+                
 
 				//Remove the (Sandbox) portion of the title
-				const String remove = " (Sandbox)";
-				if (current_game_title.Length > remove.Length)
-					current_game_title = current_game_title.Remove(current_game_title.Length - remove.Length);
+                const String removeS = " (SANDBOX)";
+                const String removeC = " (CAREER)";
+
+
+                if ((current_game_title.Length > removeS.Length) && current_game_title.Contains(removeS))
+                {
+                    current_game_title = current_game_title.Remove(current_game_title.Length - removeS.Length);
+                }
+
+                if (current_game_title.Length > removeC.Length && current_game_title.Contains(removeC))
+                {
+                    current_game_title = current_game_title.Remove(current_game_title.Length - removeC.Length);
+                }
 			}
 
 			byte[] title_bytes = encoder.GetBytes(current_game_title);
@@ -1281,6 +1294,12 @@ namespace KLF
 			if (Input.GetKeyDown(KLFGlobalSettings.instance.screenshotKey))
 				shareScreenshot();
 
+            if (Input.GetKeyDown(KLFGlobalSettings.instance.chatKey))
+                KLFGlobalSettings.instance.chatWindowEnabled = !KLFGlobalSettings.instance.chatWindowEnabled;
+
+            if (Input.GetKeyDown(KLFGlobalSettings.instance.viewKey))
+                KLFScreenshotDisplay.windowEnabled = !KLFScreenshotDisplay.windowEnabled;
+
 			if (Input.anyKeyDown)
 				lastKeyPressTime = UnityEngine.Time.realtimeSinceStartup;
 
@@ -1304,6 +1323,26 @@ namespace KLF
 					mappingScreenshotKey = false;
 				}
 			}
+
+            if (mappingChatKey)
+            {
+                KeyCode key = KeyCode.F9;
+                if (getAnyKeyDown(ref key))
+                {
+                    KLFGlobalSettings.instance.chatKey = key;
+                    mappingChatKey = false;
+                }
+            }
+
+            if (mappingViewKey)
+            {
+                KeyCode key = KeyCode.F10;
+                if (getAnyKeyDown(ref key))
+                {
+                    KLFGlobalSettings.instance.viewKey = key;
+                    mappingViewKey = false;
+                }
+            }
 
 		}
 
@@ -1480,8 +1519,8 @@ namespace KLF
 				GUILayout.EndScrollView();
 
 				GUILayout.BeginHorizontal();
-				KLFGlobalSettings.instance.chatWindowEnabled = GUILayout.Toggle(KLFGlobalSettings.instance.chatWindowEnabled, "Chat", GUI.skin.button);
-				KLFScreenshotDisplay.windowEnabled = GUILayout.Toggle(KLFScreenshotDisplay.windowEnabled, "Viewer", GUI.skin.button);
+				KLFGlobalSettings.instance.chatWindowEnabled = GUILayout.Toggle(KLFGlobalSettings.instance.chatWindowEnabled, "Chat ("+KLFGlobalSettings.instance.chatKey+")", GUI.skin.button);
+				KLFScreenshotDisplay.windowEnabled = GUILayout.Toggle(KLFScreenshotDisplay.windowEnabled, "Viewer ("+KLFGlobalSettings.instance.viewKey+")", GUI.skin.button);
 				if (GUILayout.Button("Share Screen ("+KLFGlobalSettings.instance.screenshotKey+")"))
 					shareScreenshot();
 				GUILayout.EndHorizontal();
@@ -1532,6 +1571,20 @@ namespace KLF
 						GUI.skin.button);
 
 					GUILayout.EndHorizontal();
+
+                    GUILayout.BeginHorizontal();
+
+                    mappingChatKey = GUILayout.Toggle(
+                        mappingChatKey,
+                        mappingChatKey ? "Press key" : "Chat Toggle: " + KLFGlobalSettings.instance.chatKey,
+                        GUI.skin.button);
+
+                    mappingViewKey = GUILayout.Toggle(
+                        mappingViewKey,
+                        mappingViewKey ? "Press key" : "Viewer Toggle: " + KLFGlobalSettings.instance.viewKey,
+                        GUI.skin.button);
+
+                    GUILayout.EndHorizontal();
 				}
 			}
 
