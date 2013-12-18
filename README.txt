@@ -1,4 +1,4 @@
-KerbalLiveFeed Plugin, Client, and Server v0.7.1
+KerbalLiveFeed Plugin, Client, and Server v0.7.3
 Created by Alfred Lam
 
 
@@ -62,7 +62,7 @@ Created by Alfred Lam
 
 # Recent Changes
 
-* 2013-12-18 Compatibility for KSP 0.23
+* 2013-12-18 Compatibility for KSP 0.23, version to 0.7.3
 
 
 
