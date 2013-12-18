@@ -6,14 +6,17 @@
 .git
 
 # Logs etc.
+**/*.log
 
 # Windows project stuff
+**/bin
+**/obj
+**/*.suo
+*.cache
 
-/obj
-
-KLFClient/obj
-
-KLFServer/obj
+# Monodevelop project stuff
+**/*.userprefs
+**/*.pidb
 
 # Windows runtime
 *.exe
@@ -23,3 +26,10 @@ KLFServer/obj
 
 # Windows clutter
 *.db
+
+# don't distribute KSP binaries
+Assembly-CSharp.dll
+Assembly-CSharp-firstpass.dll
+UnityEngine.dll
+**/*.dll
+

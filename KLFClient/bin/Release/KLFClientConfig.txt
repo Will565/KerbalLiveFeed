@@ -1,6 +1,0 @@
-username
-nevermoto
-ip
-klf.general-physics.de:2075
-reconnect
-True
