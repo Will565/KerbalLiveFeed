@@ -1,9 +1,70 @@
 #!/usr/bin/env bash
-mcs \
--langversion:4 \
--r:Assembly-CSharp.dll \
--r:Assembly-CSharp-firstpass.dll \
--r:UnityEngine.dll \
--t:library \
-*.cs -out:bin/KerbalLiveFeed.dll
-#-r:KSP_Data/Managed/System.dll \
+
+#plugin
+function build_plugin
+{
+    echo "Building KerbalLiveFeed.dll..."
+    mcs \
+    -langversion:4 \
+    -t:library \
+    -r:lib/Assembly-CSharp.dll \
+    -r:lib/Assembly-CSharp-firstpass.dll \
+    -r:lib/UnityEngine.dll \
+    Client/Client.cs \
+    Client/ClientSettings.cs \
+    AssemblyInfo.cs \
+    Plugin/*.cs -out:Plugin/KerbalLiveFeed.dll
+}
+
+#client
+function build_client
+{
+    echo "Building KLFClient.exe..."
+    mcs \
+    -langversion:4 \
+    -r:lib/Assembly-CSharp.dll \
+    -r:lib/Assembly-CSharp-firstpass.dll \
+    -r:lib/UnityEngine.dll \
+    Plugin/KLFCommon.cs \
+    Plugin/Screenshot.cs \
+    Plugin/ScreenshotSettings.cs \
+    AssemblyInfo.cs \
+    Client/*.cs -out:Client/KLFClient.exe
+}
+
+#server
+function build_server
+{
+    echo "Building KLFServer.exe..."
+    mcs \
+    -langversion:4 \
+    -r:lib/Assembly-CSharp.dll \
+    -r:lib/Assembly-CSharp-firstpass.dll \
+    -r:lib/UnityEngine.dll \
+    Plugin/KLFCommon.cs \
+    Plugin/Screenshot.cs \
+    Plugin/ScreenshotSettings.cs \
+    AssemblyInfo.cs \
+    Server/*.cs -out:Server/KLFServer.exe
+}
+
+while [ -n "$1" ]
+do
+    case $1 in
+    plugin|Plugin)
+        build_plugin
+        ;;
+    client|Client)
+        build_client
+        ;;
+    server|Server)
+        build_server
+        ;;
+    *)
+        build_plugin
+        build_client
+        build_server
+        ;;
+    esac
+    shift
+done
