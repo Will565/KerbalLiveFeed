@@ -9,10 +9,42 @@ Created by Alfred Lam
 
 
 
-# How to use
+# Usage
 
-* Run KLFClient.exe while KSP is running and connect to a KLF server.
+* Run KLFClient.exe
+* Use the listed commands to configure username and server to connect.
+* Use KLFClient.exe to connect to a server. (C to connect)
+* Start KSP
 
+_Apple/Linux users run in a new terminal:  TERM=ansi; mono KLFClient.exe_
+
+
+
+# Troubleshooting
+
+*  KLF Window missing in-game!
+
+   * Get passed the Title screen by starting or resuming a game.
+
+
+   * Make sure the Plugin resides within the GameData directory:
+
+     >     GameData/KLF/Plugins/KerbalLiveFeed.dll
+
+*  Game crashes when trying to view screenshots.
+
+   * If using the Linux client you can modify the KSP binary to avoid a crash:
+
+     >     echo "838077: 00" | xxd -r - KSP.x86\_64
+     >     echo "83807c: 00" | xxd -r - KSP.x86\_64
+
+     See [forums for more detail](http://forum.kerbalspaceprogram.com/threads/24529-The-Linux-compatibility-thread!?p=857019&viewfull=1#post857019)
+
+*  Random text and symbols instead of colour output in KLFClient.exe
+
+   * Before running the client, set the TERM environment variable to ansi:
+
+     >     TERM=ansi; mono KLFClient.exe
 
 
 # Server Settings
@@ -57,6 +89,7 @@ Created by Alfred Lam
     The maximum height of the screenshots players share.  Between 135 to 540.
     
     (Ideal values: 135, 144, 180, 270, 315, 360, 540)
+
 
 
 

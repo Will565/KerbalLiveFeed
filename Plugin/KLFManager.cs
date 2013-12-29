@@ -647,9 +647,11 @@ public class KLFManager : MonoBehaviour
         }
 
         //Check if the vessel is docking
-        if (detail.activity == Activity.NONE && FlightGlobals.fetch.VesselTarget != null && FlightGlobals.fetch.VesselTarget is ModuleDockingNode
-                && Vector3.Distance(vessel.GetWorldPos3D(), FlightGlobals.fetch.VesselTarget.GetTransform().position) < DOCKING_TARGET_RANGE)
-            detail.activity = Activity.DOCKING;
+        if (detail.activity == Activity.NONE
+        && FlightGlobals.fetch.VesselTarget != null
+        && FlightGlobals.fetch.VesselTarget is ModuleDockingNode
+        && Vector3.Distance(vessel.GetWorldPos3D(), FlightGlobals.fetch.VesselTarget.GetTransform().position) < DOCKING_TARGET_RANGE
+        ) detail.activity = Activity.DOCKING;
 
         return detail;
     }
@@ -662,21 +664,15 @@ public class KLFManager : MonoBehaviour
         {
             current_game_title = HighLogic.CurrentGame.Title;
 
-
             //Remove the (Sandbox) portion of the title
             const String removeS = " (SANDBOX)";
             const String removeC = " (CAREER)";
 
-
             if ((current_game_title.Length > removeS.Length) && current_game_title.Contains(removeS))
-            {
                 current_game_title = current_game_title.Remove(current_game_title.Length - removeS.Length);
-            }
 
             if (current_game_title.Length > removeC.Length && current_game_title.Contains(removeC))
-            {
                 current_game_title = current_game_title.Remove(current_game_title.Length - removeC.Length);
-            }
         }
 
         byte[] title_bytes = encoder.GetBytes(current_game_title);
