@@ -5,6 +5,8 @@
 * Use System.IO (instead of File.IO wrapper)
   * Enforce strict usage guidelines.
 * Use named pipe instead of file manipulation for IPC.
+  * [MSDN reference](http://msdn.microsoft.com/en-us/library/bb762927(v=vs.100)): http://msdn.microsoft.com/en-us/library/bb762927(v=vs.100)
+  * [codeguru example](http://www.codeguru.com/csharp/csharp/cs_misc/sampleprograms/article.php/c7259/InterProcess-Communication-in-NET-Using-Named-Pipes-Part-1.htm)
 
 
 ## Connectivity
@@ -15,9 +17,10 @@
 
 ## Screen capture methods
 
-* Improve screenshot capture method
-  * Wait for end of frame.
-  * Indicate progress, detect failures.
+* Improve screenshot capture method.  (Wait for end of frame.)
+  * [unity answers example](http://answers.unity3d.com/questions/22954/how-to-save-a-picture-take-screenshot-from-a-camer.html)
+  * [wiki example](http://wiki.unity3d.com/index.php/ScreenCapture)
+  * Indicate progress, detect failures. (maybe)
 
 
 # Phase 2
@@ -58,6 +61,7 @@
 
 * Replace communication model with WCF.
   * Create KLF message protocol diagram
+  * Apply WCF structure, [reference](http://tech.pro/tutorial/855/wcf-tutorial-basic-interprocess-communication)
 
 ## Authentication
 
