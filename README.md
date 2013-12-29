@@ -35,8 +35,8 @@ _Apple/Linux users run in a new terminal:  TERM=ansi; mono KLFClient.exe_
 
    * If using the Linux client you can modify the KSP binary to avoid a crash:
 
-     >     echo "838077: 00" | xxd -r - KSP.x86\_64
-     >     echo "83807c: 00" | xxd -r - KSP.x86\_64
+     >     echo "838077: 00" | xxd -r - KSP.x86_64
+     >     echo "83807c: 00" | xxd -r - KSP.x86_64
 
      See [forums for more detail](http://forum.kerbalspaceprogram.com/threads/24529-The-Linux-compatibility-thread!?p=857019&viewfull=1#post857019)
 
