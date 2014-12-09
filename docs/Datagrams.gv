@@ -1,0 +1,37 @@
+/*
+The idea is to eventually model the KLF protocol.
+
+Usage:
+
+    $ fdp -Tpng Datagrams.gv -o Datagrams.png
+
+*/
+digraph Data Structures
+{
+    label="";
+    labelloc="t";
+    fontsize=14;
+    layout=dot;
+    rankdir=TB;
+    nodesep=0.3;
+    ranksep=0.4;
+    constraint=true;
+    splines=true;
+    labelfloat=true;
+    decorate=true;
+    overlap=false;
+    outputorder=edgesfirst;
+
+    subgraph datarecords
+    {
+        node [shape=record,height=1,fontsize=10];
+
+    }
+
+    subgraph hosts
+    {
+        node [shape=rect,height=1,fontsize=10];
+        client;
+        server;
+    }
+}

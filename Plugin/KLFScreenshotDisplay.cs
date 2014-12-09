@@ -2,28 +2,28 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-
 using UnityEngine;
 
 namespace KLF
 {
-class KLFScreenshotDisplay
-{
-    public const float MIN_WINDOW_WIDTH = ScreenshotSettings.MIN_WIDTH + 100;
-    public const float MIN_WINDOW_HEIGHT = ScreenshotSettings.MIN_HEIGHT + 10;
+    class KLFScreenshotDisplay
+    {
+        public const float MinWindowWidth = ScreenshotSettings.DefaultMinWidth + 100;
+        public const float MinWindowHeight = ScreenshotSettings.DefaultMinHeight + 10;
 
-    public static Screenshot screenshot = new Screenshot();
-    public static ScreenshotSettings screenshotSettings = new ScreenshotSettings();
-    public static bool windowEnabled = false;
-    public static String watchPlayerName = String.Empty;
-    public static int watchPlayerIndex = 0;
-    public static Texture2D texture;
+        public static Screenshot Screenshot = new Screenshot();
+        public static ScreenshotSettings Settings = new ScreenshotSettings();
+        public static bool WindowEnabled = false;
+        public static String WatchPlayerName = String.Empty;
+        public static int WatchPlayerIndex = 0;
+        public static Texture2D Texture;
 
-    public static Rect windowPos = new Rect(
-        Screen.width / 2 - MIN_WINDOW_WIDTH / 2, Screen.height / 2 - MIN_WINDOW_HEIGHT / 2,
-        MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
-    public static Vector2 scrollPos = Vector2.zero;
-
-    public static GUILayoutOption[] layoutOptions;
-}
+        public static Rect WindowPos =
+            new Rect( Screen.width / 2 - MinWindowWidth / 2
+                    , Screen.height / 2 - MinWindowHeight / 2
+                    , MinWindowWidth
+                    , MinWindowHeight);
+        public static Vector2 ScrollPos = Vector2.zero;
+        public static GUILayoutOption[] LayoutOptions;
+    }
 }

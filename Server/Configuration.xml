@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ServerSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <MaxClients>32</MaxClients>
+  <ScreenshotBacklog>4</ScreenshotBacklog>
+  <ScreenshotInterval>3000</ScreenshotInterval>
+  <ScreenshotFloodLimit>10</ScreenshotFloodLimit>
+  <ScreenshotFloodThrottleTime>300000</ScreenshotFloodThrottleTime>
+  <MessageFloodLimit>15</MessageFloodLimit>
+  <MessageFloodThrottleTime>120000</MessageFloodThrottleTime>
+  <AutoRestart>true</AutoRestart>
+  <AutoHost>false</AutoHost>
+  <SaveScreenshots>false</SaveScreenshots>
+  <JoinMessage />
+  <ServerInfo>Hiya!</ServerInfo>
+  <TotalInactiveShips>20</TotalInactiveShips>
+  <ScreenshotSettings>
+    <MaxWidth>480</MaxWidth>
+    <MaxHeight>270</MaxHeight>
+  </ScreenshotSettings>
+  <Port>2075</Port>
+  <HttpPort>80</HttpPort>
+  <UpdatesPerSecond>10</UpdatesPerSecond>
+</ServerSettings>

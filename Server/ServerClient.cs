@@ -10,571 +10,490 @@ using System.Collections.Concurrent;
 
 namespace KLFServer
 {
-class ServerClient
-{
-    public struct ThrottleState
+    class ServerClient
     {
-        public long messageFloodCounterTime;
-        public int messageFloodCounter;
-        public long messageFloodThrottleUntilTime;
-
-        public long screenshotFloodCounterTime;
-        public int screenshotFloodCounter;
-        public long screenshotThrottleUntilTime;
-
-        public void reset()
+        public struct ThrottleState
         {
-            screenshotFloodCounter = 0;
-            screenshotFloodCounterTime = 0;
-            screenshotThrottleUntilTime = 0;
+            public long MessageFloodCounterTime;
+            public int MessageFloodCounter;
+            public long MessageFloodThrottleUntilTime;
+            public long ScreenshotFloodCounterTime;
+            public int ScreenshotFloodCounter;
+            public long ScreenshotThrottleUntilTime;
 
-            messageFloodCounterTime = 0;
-            messageFloodCounter = 0;
-            messageFloodThrottleUntilTime = 0;
-        }
-
-    }
-
-    public enum ActivityLevel
-    {
-        INACTIVE,
-        IN_GAME,
-        IN_FLIGHT
-    }
-
-    public const int SEND_BUFFER_SIZE = 8192;
-    public const long SCREENSHOT_THROTTLE_INTERVAL = 60 * 1000;
-    public const long MESSAGE_THROTTLE_INTERVAL = 60 * 1000;
-
-    //Properties
-
-    public Server parent
-    {
-        private set;
-        get;
-    }
-    public int clientIndex
-    {
-        private set;
-        get;
-    }
-    public String username;
-
-    public bool receivedHandshake;
-    public bool canBeReplaced;
-
-    public Screenshot[] screenshots;
-    public int watchPlayerIndex;
-    public String watchPlayerName;
-    public byte[] sharedCraftFile;
-    public String sharedCraftName;
-    public byte sharedCraftType;
-
-    public long connectionStartTime;
-    public long lastReceiveTime;
-    public long lastUDPACKTime;
-
-    public long lastInGameActivityTime;
-    public long lastInFlightActivityTime;
-    public ActivityLevel activityLevel;
-
-    public ThrottleState throttleState;
-
-    public TcpClient tcpClient;
-    public IPAddress ip;
-
-    public object tcpClientLock = new object();
-    public object timestampLock = new object();
-    public object activityLevelLock = new object();
-    public object screenshotLock = new object();
-    public object watchPlayerNameLock = new object();
-    public object sharedCraftLock = new object();
-
-    private byte[] receiveBuffer = new byte[8192];
-    private int receiveIndex = 0;
-    private int receiveHandleIndex = 0;
-
-    private byte[] currentMessageHeader = new byte[KLFCommon.MSG_HEADER_LENGTH];
-    private int currentMessageHeaderIndex;
-    private byte[] currentMessageData;
-    private int currentMessageDataIndex;
-
-    public KLFCommon.ClientMessageID currentMessageID;
-
-    public ConcurrentQueue<byte[]> queuedOutMessages;
-
-    public ServerClient(Server parent, int index)
-    {
-        this.parent = parent;
-        this.clientIndex = index;
-
-        canBeReplaced = true;
-
-        queuedOutMessages = new ConcurrentQueue<byte[]>();
-    }
-
-    public void resetProperties()
-    {
-        username = "new user";
-        screenshots = new Screenshot[parent.settings.screenshotBacklog];
-        watchPlayerName = String.Empty;
-        watchPlayerIndex = 0;
-        canBeReplaced = false;
-        receivedHandshake = false;
-
-        sharedCraftFile = null;
-        sharedCraftName = String.Empty;
-        sharedCraftType = 0;
-
-        throttleState.reset();
-
-        lastUDPACKTime = 0;
-
-        queuedOutMessages = new ConcurrentQueue<byte[]>();
-
-        lock (activityLevelLock)
-        {
-            activityLevel = ServerClient.ActivityLevel.INACTIVE;
-            lastInGameActivityTime = parent.currentMillisecond;
-            lastInFlightActivityTime = parent.currentMillisecond;
-        }
-
-        lock (timestampLock)
-        {
-            lastReceiveTime = parent.currentMillisecond;
-            connectionStartTime = parent.currentMillisecond;
-        }
-    }
-
-    public void updateReceiveTimestamp()
-    {
-        lock (timestampLock)
-        {
-            lastReceiveTime = parent.currentMillisecond;
-        }
-    }
-
-    public void disconnected()
-    {
-        canBeReplaced = true;
-        screenshots = null;
-        watchPlayerName = String.Empty;
-
-        sharedCraftFile = null;
-        sharedCraftName = String.Empty;
-    }
-
-    //Async read
-
-    private void beginAsyncRead()
-    {
-        try
-        {
-            if (tcpClient != null)
+            public void Reset()
             {
-                currentMessageHeaderIndex = 0;
-                currentMessageDataIndex = 0;
-                receiveIndex = 0;
-                receiveHandleIndex = 0;
+                ScreenshotFloodCounter = 0;
+                ScreenshotFloodCounterTime = 0;
+                ScreenshotThrottleUntilTime = 0;
 
-                tcpClient.GetStream().BeginRead(
-                    receiveBuffer,
-                    receiveIndex,
-                    receiveBuffer.Length - receiveIndex,
-                    asyncReceive,
-                    receiveBuffer);
+                MessageFloodCounterTime = 0;
+                MessageFloodCounter = 0;
+                MessageFloodThrottleUntilTime = 0;
             }
         }
-        catch (InvalidOperationException)
-        {
-        }
-        catch (System.IO.IOException)
-        {
-        }
-        catch (Exception e)
-        {
-            parent.passExceptionToMain(e);
-        }
-    }
 
-    private void asyncReceive(IAsyncResult result)
-    {
-        try
+        public enum Activity
         {
-            int read = tcpClient.GetStream().EndRead(result);
+            Inactive,
+            InGame,
+            InFlight
+        }
 
-            if (read > 0)
+        public const int SendBufferSize = 8192;
+        public const long ScreenshotThrottleInterval = 60 * 1000;
+        public const long MessageThrottleInterval = 60 * 1000;
+
+        //Handles
+        public Server Parent
+        {
+            private set;
+            get;
+        }
+        public int ClientIndex
+        {
+            private set;
+            get;
+        }
+        public String Username;
+
+        public bool ReceivedHandshake;
+        public bool CanBeReplaced;
+
+        public Screenshot[] Screenshots;
+        public int WatchPlayerIndex;
+        public String WatchPlayerName;
+
+        public byte[] SharedCraftFile;
+        public String SharedCraftName;
+        public byte SharedCraftType;
+
+        //timing
+        public long LastInGameActivityTime;
+        public long LastInFlightActivityTime;
+        public Activity CurrentActivity;
+        public ThrottleState CurrentThrottle;
+
+        //connection tracking
+        public long ConnectionStartTime;
+        public long LastReceiveTime;
+        public long LastUdpAckTime;
+
+        public TcpClient TcpConnection;
+        public IPAddress IP;
+
+        //Message buffers
+        private byte[] ReceiveBuffer = new byte[8192];
+        private int ReceiveIndex = 0;
+        private int ReceiveHandleIndex = 0;
+
+        private byte[] CurrentMessageHeader = new byte[KLFCommon.MessageHeaderLength];
+        private int CurrentMessageHeaderIndex;
+        private byte[] CurrentMessageData;
+        private int CurrentMessageDataIndex;
+
+        public KLFCommon.ClientMessageID CurrentMessageID;
+        public ConcurrentQueue<byte[]> QueuedOutMessages;
+
+        //Locks
+        public object TcpClientLock = new object();
+        public object TimestampLock = new object();
+        public object ActivityLock = new object();
+        public object ScreenshotLock = new object();
+        public object WatchPlayerNameLock = new object();
+        public object SharedCraftLock = new object();
+
+        public int LastScreenshotIndex
+        {
+            get
             {
-                receiveIndex += read;
+                if (Screenshots[0] != null)
+                    return Screenshots[0].Index;
+                else
+                    return 0;
+            }
+        }
+        public int FirstScreenshotIndex
+        {
+            get
+            {
+                for (int i = Screenshots.Length - 1; i >= 0; i--)
+                    if (Screenshots[i] != null)
+                        return Screenshots[i].Index;
+                return -1;
+            }
+        }
 
-                updateReceiveTimestamp();
-                handleReceive();
+        //Constructor
+        public ServerClient(Server parent, int index)
+        {
+            this.Parent = parent;
+            this.ClientIndex = index;
+            CanBeReplaced = true;
+            QueuedOutMessages = new ConcurrentQueue<byte[]>();
+        }
+
+        public void ResetProperties()
+        {
+            Username = "new user";
+            Screenshots = new Screenshot[Parent.Configuration.ScreenshotBacklog];
+            WatchPlayerName = String.Empty;
+            WatchPlayerIndex = 0;
+            CanBeReplaced = false;
+            ReceivedHandshake = false;
+            SharedCraftFile = null;
+            SharedCraftName = String.Empty;
+            SharedCraftType = 0;
+            CurrentThrottle.Reset();
+            LastUdpAckTime = 0;
+            QueuedOutMessages = new ConcurrentQueue<byte[]>();
+            lock (ActivityLock)
+            {
+                CurrentActivity = ServerClient.Activity.Inactive;
+                LastInGameActivityTime = Parent.CurrentMillisecond;
+                LastInFlightActivityTime = Parent.CurrentMillisecond;
+            }
+            lock (TimestampLock)
+            {
+                LastReceiveTime = Parent.CurrentMillisecond;
+                ConnectionStartTime = Parent.CurrentMillisecond;
+            }
+        }
+
+        public void UpdateReceiveTimestamp()
+        {
+            lock (TimestampLock)
+            {
+                LastReceiveTime = Parent.CurrentMillisecond;
+            }
+        }
+
+        public void Disconnected()
+        {
+            CanBeReplaced = true;
+            Screenshots = null;
+            WatchPlayerName = String.Empty;
+            SharedCraftFile = null;
+            SharedCraftName = String.Empty;
+        }
+
+        //Async read
+        private void BeginAsyncRead()
+        {
+            try
+            {
+                if (TcpConnection != null)
+                {
+                    CurrentMessageHeaderIndex = 0;
+                    CurrentMessageDataIndex = 0;
+                    ReceiveIndex = 0;
+                    ReceiveHandleIndex = 0;
+                    TcpConnection.GetStream().BeginRead
+                        ( ReceiveBuffer
+                        , ReceiveIndex
+                        , ReceiveBuffer.Length - ReceiveIndex
+                        , AsyncReceive
+                        , ReceiveBuffer
+                        );
+                }
+            }
+            catch (InvalidOperationException) {}
+            catch (System.IO.IOException) {}
+            catch (Exception e)
+            {
+                Parent.PassExceptionToMain(e);
+            }
+        }
+
+        private void AsyncReceive(IAsyncResult result)
+        {
+            try
+            {
+                int read = TcpConnection.GetStream().EndRead(result);
+                if (read > 0)
+                {
+                    ReceiveIndex += read;
+                    UpdateReceiveTimestamp();
+                    HandleReceive();
+                }
+                TcpConnection.GetStream().BeginRead
+                    ( ReceiveBuffer
+                    , ReceiveIndex
+                    , ReceiveBuffer.Length - ReceiveIndex
+                    , AsyncReceive
+                    , ReceiveBuffer
+                    );
+            }
+            catch (InvalidOperationException) {}
+            catch (System.IO.IOException) {}
+            catch (ThreadAbortException) {}
+            catch (Exception e)
+            {
+                Parent.PassExceptionToMain(e);
             }
 
-            tcpClient.GetStream().BeginRead(
-                receiveBuffer,
-                receiveIndex,
-                receiveBuffer.Length - receiveIndex,
-                asyncReceive,
-                receiveBuffer);
-        }
-        catch (InvalidOperationException)
-        {
-        }
-        catch (System.IO.IOException)
-        {
-        }
-        catch (ThreadAbortException)
-        {
-        }
-        catch (Exception e)
-        {
-            parent.passExceptionToMain(e);
         }
 
-    }
-
-    private void handleReceive()
-    {
-
-        while (receiveHandleIndex < receiveIndex)
+        private void HandleReceive()
         {
-
-            //Read header bytes
-            if (currentMessageHeaderIndex < KLFCommon.MSG_HEADER_LENGTH)
+            while (ReceiveHandleIndex < ReceiveIndex)
             {
-                //Determine how many header bytes can be read
-                int bytes_to_read = Math.Min(receiveIndex - receiveHandleIndex, KLFCommon.MSG_HEADER_LENGTH - currentMessageHeaderIndex);
-
                 //Read header bytes
-                Array.Copy(receiveBuffer, receiveHandleIndex, currentMessageHeader, currentMessageHeaderIndex, bytes_to_read);
-
-                //Advance buffer indices
-                currentMessageHeaderIndex += bytes_to_read;
-                receiveHandleIndex += bytes_to_read;
-
-                //Handle header
-                if (currentMessageHeaderIndex >= KLFCommon.MSG_HEADER_LENGTH)
+                if (CurrentMessageHeaderIndex < KLFCommon.MessageHeaderLength)
                 {
-                    int id_int = KLFCommon.intFromBytes(currentMessageHeader, 0);
-
-                    //Make sure the message id section of the header is a valid value
-                    if (id_int >= 0 && id_int < Enum.GetValues(typeof(KLFCommon.ClientMessageID)).Length)
-                        currentMessageID = (KLFCommon.ClientMessageID)id_int;
-                    else
-                        currentMessageID = KLFCommon.ClientMessageID.NULL;
-
-                    int data_length = KLFCommon.intFromBytes(currentMessageHeader, 4);
-
-                    if (data_length > 0)
-                    {
-                        //Init message data buffer
-                        currentMessageData = new byte[data_length];
-                        currentMessageDataIndex = 0;
-                    }
-                    else
-                    {
-                        currentMessageData = null;
-                        //Handle received message
-                        messageReceived(currentMessageID, null);
-
-                        //Prepare for the next header read
-                        currentMessageHeaderIndex = 0;
-                    }
-                }
-            }
-
-            if (currentMessageData != null)
-            {
-                //Read data bytes
-                if (currentMessageDataIndex < currentMessageData.Length)
-                {
-                    //Determine how many data bytes can be read
-                    int bytes_to_read = Math.Min(receiveIndex - receiveHandleIndex, currentMessageData.Length - currentMessageDataIndex);
-
-                    //Read data bytes
-                    Array.Copy(receiveBuffer, receiveHandleIndex, currentMessageData, currentMessageDataIndex, bytes_to_read);
-
+                    //Determine how many header bytes can be read
+                    int bytesToRead = Math.Min(ReceiveIndex - ReceiveHandleIndex, KLFCommon.MessageHeaderLength - CurrentMessageHeaderIndex);
+                    //Read header bytes
+                    Array.Copy(ReceiveBuffer, ReceiveHandleIndex, CurrentMessageHeader, CurrentMessageHeaderIndex, bytesToRead);
                     //Advance buffer indices
-                    currentMessageDataIndex += bytes_to_read;
-                    receiveHandleIndex += bytes_to_read;
-
-                    //Handle data
-                    if (currentMessageDataIndex >= currentMessageData.Length)
+                    CurrentMessageHeaderIndex += bytesToRead;
+                    ReceiveHandleIndex += bytesToRead;
+                    //Handle header
+                    if (CurrentMessageHeaderIndex >= KLFCommon.MessageHeaderLength)
                     {
-                        //Handle received message
-                        messageReceived(currentMessageID, currentMessageData);
+                        int idInt = KLFCommon.BytesToInt(CurrentMessageHeader, 0);
+                        //Make sure the message id section of the header is a valid value
+                        if (idInt >= 0 && idInt < Enum.GetValues(typeof(KLFCommon.ClientMessageID)).Length)
+                            CurrentMessageID = (KLFCommon.ClientMessageID)idInt;
+                        else
+                            CurrentMessageID = KLFCommon.ClientMessageID.Null;
 
-                        currentMessageData = null;
-
-                        //Prepare for the next header read
-                        currentMessageHeaderIndex = 0;
+                        int dataLength = KLFCommon.BytesToInt(CurrentMessageHeader, 4);
+                        if (dataLength > 0)
+                        {
+                            //Init message data buffer
+                            CurrentMessageData = new byte[dataLength];
+                            CurrentMessageDataIndex = 0;
+                        }
+                        else
+                        {
+                            CurrentMessageData = null;
+                            //Handle received message
+                            MessageReceived(CurrentMessageID, null);
+                            //Prepare for the next header read
+                            CurrentMessageHeaderIndex = 0;
+                        }
                     }
                 }
+
+                if (CurrentMessageData != null)//Read data bytes
+                    if (CurrentMessageDataIndex < CurrentMessageData.Length)
+                    {
+                        //Determine how many data bytes can be read
+                        int bytesToRead = Math.Min(ReceiveIndex - ReceiveHandleIndex, CurrentMessageData.Length - CurrentMessageDataIndex);
+                        //Read data bytes
+                        Array.Copy(ReceiveBuffer, ReceiveHandleIndex, CurrentMessageData, CurrentMessageDataIndex, bytesToRead);
+                        //Advance buffer indices
+                        CurrentMessageDataIndex += bytesToRead;
+                        ReceiveHandleIndex += bytesToRead;
+                        //Handle data
+                        if (CurrentMessageDataIndex >= CurrentMessageData.Length)
+                        {
+                            //Handle received message
+                            MessageReceived(CurrentMessageID, CurrentMessageData);
+                            CurrentMessageData = null;
+                            //Prepare for the next header read
+                            CurrentMessageHeaderIndex = 0;
+                        }
+                    }
             }
 
+            //Once all receive bytes have been handled, reset buffer indices to use the whole buffer again
+            ReceiveHandleIndex = 0;
+            ReceiveIndex = 0;
         }
 
-        //Once all receive bytes have been handled, reset buffer indices to use the whole buffer again
-        receiveHandleIndex = 0;
-        receiveIndex = 0;
-    }
-
-    //Asyc send
-
-    private void asyncSend(IAsyncResult result)
-    {
-        try
+        //Asyc send
+        private void AsyncSend(IAsyncResult result)
         {
-            tcpClient.GetStream().EndWrite(result);
-        }
-        catch (InvalidOperationException)
-        {
-        }
-        catch (System.IO.IOException)
-        {
-        }
-        catch (ThreadAbortException)
-        {
-        }
-        catch (Exception e)
-        {
-            parent.passExceptionToMain(e);
-        }
-    }
-
-    //Messages
-
-    private void messageReceived(KLFCommon.ClientMessageID id, byte[] data)
-    {
-        parent.queueClientMessage(clientIndex, id, data);
-    }
-
-    public void sendOutgoingMessages()
-    {
-
-        try
-        {
-            if (queuedOutMessages.Count > 0)
+            try
             {
-                //Check the size of the next message
-                byte[] next_message = null;
-                int send_buffer_index = 0;
-                byte[] send_buffer = new byte[SEND_BUFFER_SIZE];
+                TcpConnection.GetStream().EndWrite(result);
+            }
+            catch (InvalidOperationException) {}
+            catch (System.IO.IOException) {}
+            catch (ThreadAbortException) {}
+            catch (Exception e)
+            {
+                Parent.PassExceptionToMain(e);
+            }
+        }
 
-                while (queuedOutMessages.TryPeek(out next_message))
+        //Messages
+
+        private void MessageReceived(KLFCommon.ClientMessageID id, byte[] data)
+        {
+            Parent.QueueClientMessage(ClientIndex, id, data);
+        }
+
+        public void SendOutgoingMessages()
+        {
+            try
+            {
+                if (QueuedOutMessages.Count > 0)
                 {
-                    if (send_buffer_index == 0 && next_message.Length >= send_buffer.Length)
+                    //Check the size of the next message
+                    byte[] nextMessage = null;
+                    int sendBufferIndex = 0;
+                    byte[] sendBuffer = new byte[SendBufferSize];
+                    while (QueuedOutMessages.TryPeek(out nextMessage))
                     {
-                        //If the next message is too large for the send buffer, just send it
-                        queuedOutMessages.TryDequeue(out next_message);
-
-                        tcpClient.GetStream().BeginWrite(
-                            next_message,
-                            0,
-                            next_message.Length,
-                            asyncSend,
-                            next_message);
+                        if (sendBufferIndex == 0 && nextMessage.Length >= sendBuffer.Length)
+                        {//next message is too large for the send buffer, send it
+                            QueuedOutMessages.TryDequeue(out nextMessage);
+                            TcpConnection.GetStream().BeginWrite
+                                ( nextMessage
+                                , 0
+                                , nextMessage.Length
+                                , AsyncSend
+                                , nextMessage
+                                );
+                        }
+                        else if (nextMessage.Length <= (sendBuffer.Length - sendBufferIndex))
+                        {//next message is small enough, copy to the send buffer
+                            QueuedOutMessages.TryDequeue(out nextMessage);
+                            nextMessage.CopyTo(sendBuffer, sendBufferIndex);
+                            sendBufferIndex += nextMessage.Length;
+                        }
+                        else
+                        {//next message is too big, send the send buffer
+                            TcpConnection.GetStream().BeginWrite
+                                ( sendBuffer
+                                , 0
+                                , sendBufferIndex
+                                , AsyncSend
+                                , nextMessage
+                                );
+                            sendBufferIndex = 0;
+                            sendBuffer = new byte[SendBufferSize];
+                        }
                     }
-                    else if (next_message.Length <= (send_buffer.Length - send_buffer_index))
-                    {
-                        //If the next message is small enough, copy it to the send buffer
-                        queuedOutMessages.TryDequeue(out next_message);
 
-                        next_message.CopyTo(send_buffer, send_buffer_index);
-                        send_buffer_index += next_message.Length;
-                    }
-                    else
-                    {
-                        //If the next message is too big, send the send buffer
-                        tcpClient.GetStream().BeginWrite(
-                            send_buffer,
-                            0,
-                            send_buffer_index,
-                            asyncSend,
-                            next_message);
-
-                        send_buffer_index = 0;
-                        send_buffer = new byte[SEND_BUFFER_SIZE];
-                    }
+                    //Send the send buffer
+                    if (sendBufferIndex > 0)
+                        TcpConnection.GetStream().BeginWrite
+                            ( sendBuffer
+                            , 0
+                            , sendBufferIndex
+                            , AsyncSend
+                            , nextMessage
+                            );
                 }
+            }
+            catch (System.InvalidOperationException) { }
+            catch (System.IO.IOException) { }
+        }
 
-                //Send the send buffer
-                if (send_buffer_index > 0)
+        public void QueueOutgoingMessage(KLFCommon.ServerMessageID id, byte[] data)
+        {
+            QueueOutgoingMessage(Server.BuildMessageArray(id, data));
+        }
+
+        public void QueueOutgoingMessage(byte[] messageBytes)
+        {
+            QueuedOutMessages.Enqueue(messageBytes);
+        }
+
+        internal void StartReceivingMessages()
+        {
+            BeginAsyncRead();
+        }
+
+        internal void EndReceivingMessages()
+        {
+        }
+
+        //Activity Level
+        public void UpdateActivity(Activity activity)
+        {
+            bool changed = false;
+            lock (ActivityLock)
+            {
+                switch (activity)
                 {
-                    tcpClient.GetStream().BeginWrite(
-                        send_buffer,
-                        0,
-                        send_buffer_index,
-                        asyncSend,
-                        next_message);
+                    case Activity.InGame:
+                        LastInGameActivityTime = Parent.CurrentMillisecond;
+                        break;
+
+                    case Activity.InFlight:
+                        LastInFlightActivityTime = Parent.CurrentMillisecond;
+                        LastInGameActivityTime = Parent.CurrentMillisecond;
+                        break;
+                }
+
+                if (activity > CurrentActivity)
+                {
+                    CurrentActivity = activity;
+                    changed = true;
                 }
             }
+            if (changed)
+                Parent.ClientActivityChanged(ClientIndex);
         }
-        catch (System.InvalidOperationException) { }
-        catch (System.IO.IOException) { }
 
-    }
-
-    public void queueOutgoingMessage(KLFCommon.ServerMessageID id, byte[] data)
-    {
-        queueOutgoingMessage(Server.buildMessageArray(id, data));
-    }
-
-    public void queueOutgoingMessage(byte[] message_bytes)
-    {
-        queuedOutMessages.Enqueue(message_bytes);
-    }
-
-    internal void startReceivingMessages()
-    {
-        beginAsyncRead();
-    }
-
-    internal void endReceivingMessages()
-    {
-    }
-
-    //Activity Level
-
-    public void updateActivityLevel(ActivityLevel level)
-    {
-        bool changed = false;
-
-        lock (activityLevelLock)
+        //Flood limit
+        public bool ScreenshotsThrottled
         {
-            switch (level)
+            get
             {
-            case ActivityLevel.IN_GAME:
-                lastInGameActivityTime = parent.currentMillisecond;
-                break;
-
-            case ActivityLevel.IN_FLIGHT:
-                lastInFlightActivityTime = parent.currentMillisecond;
-                lastInGameActivityTime = parent.currentMillisecond;
-                break;
-            }
-
-            if (level > activityLevel)
-            {
-                activityLevel = level;
-                changed = true;
+                return Parent.CurrentMillisecond < CurrentThrottle.ScreenshotThrottleUntilTime;
             }
         }
-
-        if (changed)
-            parent.clientActivityLevelChanged(clientIndex);
-    }
-
-    //Flood limit
-
-    public bool screenshotsThrottled
-    {
-        get
+        public bool MessagesThrottled
         {
-            return parent.currentMillisecond < throttleState.screenshotThrottleUntilTime;
-        }
-    }
-
-    public bool messagesThrottled
-    {
-        get
-        {
-            return parent.currentMillisecond < throttleState.messageFloodThrottleUntilTime;
-        }
-    }
-
-    public void screenshotFloodIncrement()
-    {
-        //Reset the counter if enough time has passed
-        if (parent.currentMillisecond - throttleState.screenshotFloodCounterTime > SCREENSHOT_THROTTLE_INTERVAL)
-        {
-            throttleState.screenshotFloodCounter = 0;
-            throttleState.screenshotFloodCounterTime = parent.currentMillisecond;
-        }
-
-        throttleState.screenshotFloodCounter++;
-        if (throttleState.screenshotFloodCounter >= parent.settings.screenshotFloodLimit)
-        {
-            //If the client has shared too many screenshots in the last interval, throttle them
-            throttleState.screenshotThrottleUntilTime = parent.currentMillisecond + parent.settings.screenshotFloodThrottleTime;
-        }
-
-    }
-
-    public void messageFloodIncrement()
-    {
-        //Reset the counter if enough time has passed
-        if (parent.currentMillisecond - throttleState.messageFloodCounterTime > MESSAGE_THROTTLE_INTERVAL)
-        {
-            throttleState.messageFloodCounter = 0;
-            throttleState.messageFloodCounterTime = parent.currentMillisecond;
-        }
-
-        throttleState.messageFloodCounter++;
-        if (throttleState.messageFloodCounter >= parent.settings.messageFloodLimit)
-        {
-            throttleState.messageFloodThrottleUntilTime = parent.currentMillisecond + parent.settings.messageFloodThrottleTime;
-        }
-    }
-
-    //Screenshots
-
-    public Screenshot getScreenshot(int index)
-    {
-        foreach (Screenshot screenshot in screenshots)
-        {
-            if (screenshot != null && screenshot.index == index)
-                return screenshot;
-        }
-
-        return null;
-    }
-
-    public Screenshot lastScreenshot
-    {
-        get
-        {
-            return screenshots[0];
-        }
-    }
-
-    public void pushScreenshot(Screenshot screenshot)
-    {
-        int last_index = lastScreenshotIndex;
-
-        for (int i = 0; i < screenshots.Length - 1; i++)
-        {
-            screenshots[i + 1] = screenshots[i];
-        }
-
-        screenshots[0] = screenshot;
-        screenshots[0].index = last_index + 1;
-    }
-
-    public int lastScreenshotIndex
-    {
-        get
-        {
-            if (screenshots[0] != null)
-                return screenshots[0].index;
-            else
-                return 0;
-        }
-    }
-
-    public int firstScreenshotIndex
-    {
-        get
-        {
-            for (int i = screenshots.Length - 1; i >= 0; i--)
+            get
             {
-                if (screenshots[i] != null)
-                    return screenshots[i].index;
+                return Parent.CurrentMillisecond < CurrentThrottle.MessageFloodThrottleUntilTime;
             }
+        }
+        public void ScreenshotFloodIncrement()
+        {
+            //Reset the counter if enough time has passed
+            if (Parent.CurrentMillisecond - CurrentThrottle.ScreenshotFloodCounterTime > ScreenshotThrottleInterval)
+            {
+                CurrentThrottle.ScreenshotFloodCounter = 0;
+                CurrentThrottle.ScreenshotFloodCounterTime = Parent.CurrentMillisecond;
+            }
+            CurrentThrottle.ScreenshotFloodCounter++;
+            //If the client has shared too many Screenshots in the last interval, throttle them
+            if (CurrentThrottle.ScreenshotFloodCounter >= Parent.Configuration.ScreenshotFloodLimit)
+                CurrentThrottle.ScreenshotThrottleUntilTime = Parent.CurrentMillisecond + Parent.Configuration.ScreenshotFloodThrottleTime;
+        }
+        public void MessageFloodIncrement()
+        {
+            //Reset the counter if enough time has passed
+            if (Parent.CurrentMillisecond - CurrentThrottle.MessageFloodCounterTime > MessageThrottleInterval)
+            {
+                CurrentThrottle.MessageFloodCounter = 0;
+                CurrentThrottle.MessageFloodCounterTime = Parent.CurrentMillisecond;
+            }
+            CurrentThrottle.MessageFloodCounter++;
+            if (CurrentThrottle.MessageFloodCounter >= Parent.Configuration.MessageFloodLimit)
+                CurrentThrottle.MessageFloodThrottleUntilTime = Parent.CurrentMillisecond + Parent.Configuration.MessageFloodThrottleTime;
+        }
 
-            return -1;
+        //Screenshots
+        public Screenshot GetScreenshot(int index)
+        {
+            foreach (Screenshot shot in Screenshots)
+                if (shot != null && shot.Index == index)
+                    return shot;
+            return null;
+        }
+        public Screenshot LastScreenshot
+        {
+            get
+            {
+                return Screenshots[0];
+            }
+        }
+        public void PushScreenshot(Screenshot shot)
+        {
+            int lastIndex = LastScreenshotIndex;
+            for (int i = 0; i < Screenshots.Length - 1; i++)
+                Screenshots[i + 1] = Screenshots[i];
+            Screenshots[0] = shot;
+            Screenshots[0].Index = lastIndex + 1;
         }
     }
-}
 }

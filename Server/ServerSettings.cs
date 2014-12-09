@@ -6,311 +6,138 @@ using System.Text;
 using System.IO;
 using System.Net;
 
+using System.Xml;
+using System.Xml.Serialization;
+using System.Xml.Schema;
+
 namespace KLFServer
 {
-public class ServerSettings
-{
-    public const String SERVER_CONFIG_FILENAME = "KLFServerConfig.txt";
-    public const String LOCAL_ADDRESS_LABEL = "localAddress";
-    public const String PORT_LABEL = "port";
-    public const String HTTP_PORT_LABEL = "httpPort";
-    public const String MAX_CLIENTS_LABEL = "maxClients";
-    public const String JOIN_MESSAGE_LABEL = "joinMessage";
-    public const String SERVER_INFO_LABEL = "serverInfo";
-    public const String UPDATES_PER_SECOND_LABEL = "updatesPerSecond";
-    public const String SCREENSHOT_INTERVAL_LABEL = "screenshotInterval";
-    public const String SCREENSHOT_FLOOD_LIMIT_LABEL = "screenshotFloodLimit";
-    public const String SCREENSHOT_FLOOD_THROTTLE_TIME_LABEL = "screenshotFloodThrottleTime";
-    public const String SCREENSHOT_BACKLOG_LABEL = "screenshotBacklog";
-    public const String MESSAGE_FLOOD_LIMIT_LABEL = "messageFloodLimit";
-    public const String MESSAGE_FLOOD_THROTTLE_TIME_LABEL = "messageFloodThrottleTime";
-    public const String SAVE_SCREENSHOTS_LABEL = "saveScreenshots";
-    public const String AUTO_RESTART_LABEL = "autoRestart";
-    public const String AUTO_HOST_LABEL = "autoHost";
-    public const String TOTAL_INACTIVE_SHIPS_LABEL = "totalInactiveShips";
-    public const String SCREENSHOT_HEIGHT_LABEL = "screenshotHeight";
-
-    public IPAddress localAddress = IPAddress.Any;
-
-    public int _port = 2075;
-    public int port
+    [XmlRoot] public class ServerSettings
     {
-        get
+        [XmlIgnoreAttribute] public const int MinUpdateInterval = 200;
+        [XmlIgnoreAttribute] public const int MaxUpdateInterval = 5000;
+        [XmlIgnoreAttribute] public const float MinUpdatesPerSecond = 0.5f;
+        [XmlIgnoreAttribute] public const float MaxUpdatesPerSecond = 1000.0f;
+        [XmlIgnoreAttribute] public const int DefaultPort = 2075;
+        [XmlIgnoreAttribute] public const int DefaultHttpPort = 80;
+        [XmlIgnoreAttribute] public const int DefaultUpdatesPerSecond = 10;
+
+        [XmlIgnoreAttribute] private string filename;
+        //public IPAddress LocalAddress;
+        public int MaxClients;
+        public int ScreenshotBacklog;
+        public int ScreenshotInterval;
+        public int ScreenshotFloodLimit;
+        public int ScreenshotFloodThrottleTime;
+        public int MessageFloodLimit;
+        public int MessageFloodThrottleTime;
+        public bool AutoRestart;
+        public bool AutoHost;
+        public bool SaveScreenshots;
+        public String JoinMessage;
+        public String ServerInfo;
+        public byte TotalInactiveShips;
+        public ScreenshotSettings ScreenshotSettings;
+        private int port;
+        public int Port
         {
-            return _port;
-        }
-
-        set
-        {
-            _port = Math.Max(IPEndPoint.MinPort, Math.Min(IPEndPoint.MaxPort, value));
-        }
-    }
-
-    public int _httpPort = 80;
-    public int httpPort
-    {
-        get
-        {
-            return _httpPort;
-        }
-
-        set
-        {
-            _httpPort = Math.Max(IPEndPoint.MinPort, Math.Min(IPEndPoint.MaxPort, value));
-        }
-    }
-
-    public int maxClients = 32;
-
-    public float _updatesPerSecond = 10;
-    public float updatesPerSecond
-    {
-        get
-        {
-            return _updatesPerSecond;
-        }
-        set
-        {
-            _updatesPerSecond = Math.Max(MIN_UPDATES_PER_SECOND, Math.Min(MAX_UPDATES_PER_SECOND, value));
-        }
-    }
-
-    public int screenshotBacklog = 4;
-    public int screenshotInterval = 3000;
-    public int screenshotFloodLimit = 10;
-    public int screenshotFloodThrottleTime = 300000;
-    public int messageFloodLimit = 15;
-    public int messageFloodThrottleTime = 120000;
-    public bool autoRestart = false;
-    public bool autoHost = false;
-    public bool saveScreenshots = false;
-    public String joinMessage = String.Empty;
-    public String serverInfo = String.Empty;
-    public byte totalInactiveShips = 20;
-    public ScreenshotSettings screenshotSettings = new ScreenshotSettings();
-
-    public const int MIN_UPDATE_INTERVAL = 200;
-    public const int MAX_UPDATE_INTERVAL = 5000;
-
-    public const float MIN_UPDATES_PER_SECOND = 0.5f;
-    public const float MAX_UPDATES_PER_SECOND = 1000.0f;
-
-    //Config
-
-    public void readConfigFile()
-    {
-        try
-        {
-            TextReader reader = File.OpenText(SERVER_CONFIG_FILENAME);
-
-            String line = reader.ReadLine();
-
-            while (line != null)
+            get { return port; }
+            set
             {
-                String label = line; //Store the last line read as the label
-                line = reader.ReadLine(); //Read the value from the next line
-
-                if (line != null)
-                {
-                    //Update the value with the given label
-                    if (label == PORT_LABEL)
-                    {
-                        int new_port;
-                        if (int.TryParse(line, out new_port))
-                            port = new_port;
-                    }
-                    else if (label == HTTP_PORT_LABEL)
-                    {
-                        int new_port;
-                        if (int.TryParse(line, out new_port))
-                            httpPort = new_port;
-                    }
-                    else if (label == LOCAL_ADDRESS_LABEL)
-                    {
-                        IPAddress new_address;
-                        if (IPAddress.TryParse(line, out new_address))
-                            localAddress = new_address;
-                    }
-                    else if (label == MAX_CLIENTS_LABEL)
-                    {
-                        int new_max;
-                        if (int.TryParse(line, out new_max) && new_max > 0)
-                            maxClients = new_max;
-                    }
-                    else if (label == JOIN_MESSAGE_LABEL)
-                    {
-                        joinMessage = line;
-                    }
-                    else if (label == SERVER_INFO_LABEL)
-                    {
-                        serverInfo = line;
-                    }
-                    else if (label == UPDATES_PER_SECOND_LABEL)
-                    {
-                        int new_val;
-                        if (int.TryParse(line, out new_val))
-                            updatesPerSecond = new_val;
-                    }
-                    else if (label == SCREENSHOT_INTERVAL_LABEL)
-                    {
-                        int new_val;
-                        if (int.TryParse(line, out new_val))
-                            screenshotInterval = new_val;
-                    }
-                    else if (label == SCREENSHOT_FLOOD_LIMIT_LABEL)
-                    {
-                        int new_val;
-                        if (int.TryParse(line, out new_val))
-                            screenshotFloodLimit = new_val;
-                    }
-                    else if (label == SCREENSHOT_FLOOD_THROTTLE_TIME_LABEL)
-                    {
-                        int new_val;
-                        if (int.TryParse(line, out new_val))
-                            screenshotFloodThrottleTime = new_val;
-                    }
-                    else if (label == SCREENSHOT_BACKLOG_LABEL)
-                    {
-                        int new_val;
-                        if (int.TryParse(line, out new_val))
-                            screenshotBacklog = new_val;
-                    }
-                    else if (label == MESSAGE_FLOOD_LIMIT_LABEL)
-                    {
-                        int new_val;
-                        if (int.TryParse(line, out new_val))
-                            messageFloodLimit = new_val;
-                    }
-                    else if (label == MESSAGE_FLOOD_THROTTLE_TIME_LABEL)
-                    {
-                        int new_val;
-                        if (int.TryParse(line, out new_val))
-                            messageFloodThrottleTime = new_val;
-                    }
-                    else if (label == AUTO_RESTART_LABEL)
-                    {
-                        bool new_val;
-                        if (bool.TryParse(line, out new_val))
-                            autoRestart = new_val;
-                    }
-                    else if (label == AUTO_HOST_LABEL)
-                    {
-                        bool new_val;
-                        if (bool.TryParse(line, out new_val))
-                            autoHost = new_val;
-                    }
-                    else if (label == SAVE_SCREENSHOTS_LABEL)
-                    {
-                        bool new_val;
-                        if (bool.TryParse(line, out new_val))
-                            saveScreenshots = new_val;
-                    }
-                    else if (label == TOTAL_INACTIVE_SHIPS_LABEL)
-                    {
-                        byte new_val;
-                        if (byte.TryParse(line, out new_val))
-                            totalInactiveShips = new_val;
-                    }
-                    else if (label == SCREENSHOT_HEIGHT_LABEL)
-                    {
-                        int new_val;
-                        if (int.TryParse(line, out new_val))
-                            screenshotSettings.maxHeight = new_val;
-                    }
-
-                }
-
-                line = reader.ReadLine();
+                port = Math.Max( IPEndPoint.MinPort
+                               , Math.Min(IPEndPoint.MaxPort, value)
+                               );
             }
-
-            reader.Close();
         }
-        catch (FileNotFoundException)
+        private int httpPort;
+        public int HttpPort
         {
+            get { return httpPort; }
+            set
+            {
+                httpPort = Math.Max( IPEndPoint.MinPort
+                                   , Math.Min(IPEndPoint.MaxPort, value)
+                                   );
+            }
         }
-        catch (UnauthorizedAccessException)
+        private float updatesPerSecond;
+        public float UpdatesPerSecond
         {
+            get { return updatesPerSecond; }
+            set
+            {
+                updatesPerSecond = Math.Max( MinUpdatesPerSecond
+                                           , Math.Min(MaxUpdatesPerSecond, value)
+                                           );
+            }
         }
 
+        public ServerSettings()
+        {//constructor
+            Port = DefaultPort;
+            HttpPort = DefaultHttpPort;
+            UpdatesPerSecond = DefaultUpdatesPerSecond;
+            //LocalAddress = IPAddress.Any;
+            MaxClients = 32;
+            ScreenshotBacklog = 4;
+            ScreenshotInterval = 3000;
+            ScreenshotFloodLimit = 10;
+            ScreenshotFloodThrottleTime = 300000;
+            MessageFloodLimit = 15;
+            MessageFloodThrottleTime = 120000;
+            AutoRestart = false;
+            AutoHost = false;
+            SaveScreenshots = false;
+            JoinMessage = String.Empty;
+            ServerInfo = String.Empty;
+            TotalInactiveShips = 20;
+            ScreenshotSettings = new ScreenshotSettings();
+            filename = "Configuration.xml";
+        }
+
+
+        public void Save(string path)
+        {
+            this.filename = path;
+            Save();
+        }
+        public void Save()
+        {
+            XmlSerializer serializer = 
+                new XmlSerializer(typeof(ServerSettings));
+            try
+            {
+                using(FileStream stream = new FileStream(this.filename, FileMode.Create))
+                {
+                    serializer.Serialize(stream, this);
+                }
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine("Failed to save: {0}", this.filename);
+                Console.WriteLine(e.ToString());
+            }
+        }
+
+        public static ServerSettings Load(string path)
+        {
+            XmlSerializer serializer =
+                new XmlSerializer(typeof(ServerSettings));
+            try
+            {
+                using(FileStream stream = new FileStream(path, FileMode.Open))
+                {
+                    return serializer.Deserialize(stream)
+                        as ServerSettings;
+                }
+            }
+        //    catch(FileNotFoundException) {}
+            catch(Exception e)
+            {
+                Console.WriteLine("Failed to load: {0}", path);
+                Console.WriteLine(e.ToString());
+            }
+            return null;
+        }
     }
-
-    public void writeConfigFile()
-    {
-        TextWriter writer = File.CreateText(SERVER_CONFIG_FILENAME);
-
-        //port
-        writer.WriteLine(PORT_LABEL);
-        writer.WriteLine(port);
-
-        //http port
-        writer.WriteLine(HTTP_PORT_LABEL);
-        writer.WriteLine(httpPort);
-
-        //local address
-        writer.WriteLine(LOCAL_ADDRESS_LABEL);
-        writer.WriteLine(localAddress);
-
-        //max clients
-        writer.WriteLine(MAX_CLIENTS_LABEL);
-        writer.WriteLine(maxClients);
-
-        //join message
-        writer.WriteLine(JOIN_MESSAGE_LABEL);
-        writer.WriteLine(joinMessage);
-
-        //server info
-        writer.WriteLine(SERVER_INFO_LABEL);
-        writer.WriteLine(serverInfo);
-
-        //update interval
-        writer.WriteLine(UPDATES_PER_SECOND_LABEL);
-        writer.WriteLine(updatesPerSecond);
-
-        //screenshot interval
-        writer.WriteLine(SCREENSHOT_INTERVAL_LABEL);
-        writer.WriteLine(screenshotInterval);
-
-        //auto-restart
-        writer.WriteLine(AUTO_RESTART_LABEL);
-        writer.WriteLine(autoRestart);
-
-        //auto-host
-        writer.WriteLine(AUTO_HOST_LABEL);
-        writer.WriteLine(autoHost);
-
-        //upnp
-        writer.WriteLine(TOTAL_INACTIVE_SHIPS_LABEL);
-        writer.WriteLine(totalInactiveShips);
-
-        //save screenshots
-        writer.WriteLine(SAVE_SCREENSHOTS_LABEL);
-        writer.WriteLine(saveScreenshots);
-
-        //screenshot height
-        writer.WriteLine(SCREENSHOT_HEIGHT_LABEL);
-        writer.WriteLine(screenshotSettings.maxHeight);
-
-        //screenshot flood limit
-        writer.WriteLine(SCREENSHOT_FLOOD_LIMIT_LABEL);
-        writer.WriteLine(screenshotFloodLimit);
-
-        //screenshot throttle time
-        writer.WriteLine(SCREENSHOT_FLOOD_THROTTLE_TIME_LABEL);
-        writer.WriteLine(screenshotFloodThrottleTime);
-
-        //screenshot backlog
-        writer.WriteLine(SCREENSHOT_BACKLOG_LABEL);
-        writer.WriteLine(screenshotBacklog);
-
-        //message flood limit
-        writer.WriteLine(MESSAGE_FLOOD_LIMIT_LABEL);
-        writer.WriteLine(messageFloodLimit);
-
-        //message throttle time
-        writer.WriteLine(MESSAGE_FLOOD_THROTTLE_TIME_LABEL);
-        writer.WriteLine(messageFloodThrottleTime);
-
-        writer.Close();
-    }
-}
 }

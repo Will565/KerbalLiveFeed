@@ -48,6 +48,25 @@ function build_server
     Server/*.cs -out:Server/KLFServer.exe
 }
 
+#testclient
+function test_client
+{
+    cd Client
+    TERM=ansi
+    mono KLFClient.exe
+}
+
+#testclient
+function test_server
+{
+    cd Server
+    TERM=ansi
+    mono KLFServer.exe
+}
+
+if [ -z "$1" ]; then
+    echo "Provide build targets:  ./monomake [plugin|client|server|all] [...]"
+fi
 while [ -n "$1" ]
 do
     case $1 in
@@ -57,10 +76,16 @@ do
     client|Client)
         build_client
         ;;
+    testclient)
+        test_client
+        ;;
     server|Server)
         build_server
         ;;
-    *)
+    testserver)
+        test_server
+        ;;
+    all|All)
         build_plugin
         build_client
         build_server

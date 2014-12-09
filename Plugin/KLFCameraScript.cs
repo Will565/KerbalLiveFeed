@@ -2,21 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-
 using UnityEngine;
 
 namespace KLF
 {
-class KLFCameraScript : MonoBehaviour
-{
-    public KLFManager manager;
-
-    public void OnPreRender()
+    class KLFCameraScript : MonoBehaviour
     {
-        if (manager != null)
+        public KLFManager Manager;
+        public void OnPreRender()
         {
-            manager.updateVesselPositions();
+            if (Manager != null)
+                Manager.UpdateVesselPositions();
         }
     }
-}
 }

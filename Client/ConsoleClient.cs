@@ -10,191 +10,136 @@ using System.IO;
 class ConsoleClient : Client
 {
 
-    public ConcurrentQueue<InteropMessage> interopInQueue;
-    public ConcurrentQueue<InteropMessage> interopOutQueue;
-    private ConcurrentQueue<ServerMessage> receivedMessageQueue;
-    public long lastInteropWriteTime;
+    public ConcurrentQueue<InteropMessage> InteropInQueue;
+    public ConcurrentQueue<InteropMessage> InteropOutQueue;
+    private ConcurrentQueue<ServerMessage> ReceivedMessageQueue;
+    public long LastInteropWriteTime;
+    private ConcurrentQueue<InTextMessage> TextMessageQueue;
+    private Thread InteropThread;
+    private Thread ChatThread;
+    private Thread ConnectionThread;
+    protected String ThreadExceptionStackTrace;
+    protected Exception ClientThreadException;
 
-    //private ConcurrentQueue<byte[]> pluginUpdateInQueue;
-    private ConcurrentQueue<InTextMessage> textMessageQueue;
-
-    private Thread interopThread;
-    private Thread chatThread;
-    private Thread connectionThread;
-
-    protected String threadExceptionStackTrace;
-    protected Exception threadException;
-
-    public void connect(ClientSettings settings)
+    public void Connect(ClientSettings settings)
     {
-        bool allow_reconnect = false;
-        int reconnect_attempts = MAX_RECONNECT_ATTEMPTS;
-
+        bool allowReconnect = false;
+        int reconnectAttempts = MaxReconnectAttempts;
         do
         {
-
-            allow_reconnect = false;
-
+            allowReconnect = false;
             try
             {
-                //Run the connection loop then determine if a reconnect attempt should be made
-                if (connectionLoop(settings))
+                if (ConnectionLoop(settings))
                 {
-                    reconnect_attempts = 0;
-                    allow_reconnect = settings.autoReconnect && !intentionalConnectionEnd;
+                    reconnectAttempts = 0;
+                    allowReconnect = settings.Reconnect && !IntentionalConnectionEnd;
                 }
                 else
-                    allow_reconnect = settings.autoReconnect && !intentionalConnectionEnd && reconnect_attempts < MAX_RECONNECT_ATTEMPTS;
+                    allowReconnect = settings.Reconnect && !IntentionalConnectionEnd && reconnectAttempts < MaxReconnectAttempts;
             }
             catch (Exception e)
             {
-
-                //Write an error log
                 TextWriter writer = File.CreateText("KLFClientlog.txt");
                 writer.WriteLine(e.ToString());
-                if (threadExceptionStackTrace != null && threadExceptionStackTrace.Length > 0)
-                {
-                    writer.Write("Stacktrace: ");
-                    writer.WriteLine(threadExceptionStackTrace);
-                }
+                if (ThreadExceptionStackTrace != null && ThreadExceptionStackTrace.Length > 0)
+                    writer.WriteLine("Stacktrace: " + ThreadExceptionStackTrace);
                 writer.Close();
-
                 Console.ForegroundColor = ConsoleColor.Red;
-
                 Console.WriteLine();
                 Console.WriteLine(e.ToString());
-                if (threadExceptionStackTrace != null && threadExceptionStackTrace.Length > 0)
-                {
-                    Console.Write("Stacktrace: ");
-                    Console.WriteLine(threadExceptionStackTrace);
-                }
-
+                if (ThreadExceptionStackTrace != null && ThreadExceptionStackTrace.Length > 0)
+                    Console.WriteLine("Stacktrace: " + ThreadExceptionStackTrace);
                 Console.WriteLine();
                 Console.WriteLine("Unexpected exception encountered! Crash report written to KLFClientlog.txt");
                 Console.WriteLine();
-
                 Console.ResetColor();
-
-                clearConnectionState();
+                ClearConnectionState();
             }
-
-            if (allow_reconnect)
+            if (allowReconnect)
             {
-                //Attempt a reconnect after a delay
                 Console.WriteLine("Attempting to reconnect...");
-                Thread.Sleep(RECONNECT_DELAY);
-                reconnect_attempts++;
+                Thread.Sleep(ReconnectDelay);
+                reconnectAttempts++;
             }
-
-        } while (allow_reconnect);
+        } while (allowReconnect);
     }
 
-    bool connectionLoop(ClientSettings settings)
+    bool ConnectionLoop(ClientSettings settings)
     {
-        if (connectToServer(settings))
+        if (ConnectToServer(settings))
         {
-
             Console.WriteLine("Connected to server! Handshaking...");
-
-            while (isConnected)
+            while (IsConnected)
             {
                 //Check for exceptions thrown by threads
-                lock (threadExceptionLock)
+                lock (ThreadExceptionLock)
                 {
-                    if (threadException != null)
+                    if (ClientThreadException != null)
                     {
-                        Exception e = threadException;
-                        threadExceptionStackTrace = e.StackTrace;
+                        Exception e = ClientThreadException;
+                        ThreadExceptionStackTrace = e.StackTrace;
                         throw e;
                     }
                 }
-
-                Thread.Sleep(SLEEP_TIME);
+                Thread.Sleep(SleepTime);
             }
-
-            connectionEnded();
-
+            ConnectionEnded();
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine();
-
-            if (intentionalConnectionEnd)
-                enqueuePluginChatMessage("Closed connection with server", true);
+            if (IntentionalConnectionEnd)
+                EnqueuePluginChatMessage("Closed connection with server", true);
             else
-                enqueuePluginChatMessage("Lost connection with server", true);
-
+                EnqueuePluginChatMessage("Lost connection with server", true);
             Console.ResetColor();
-
             return true;
         }
-
         Console.WriteLine("Unable to connect to server");
-
-        connectionEnded();
-
+        ConnectionEnded();
         return false;
-
     }
 
-    protected override void connectionStarted()
+    protected override void ConnectionStarted()
     {
-        base.connectionStarted();
-
+        base.ConnectionStarted();
         //pluginUpdateInQueue = new ConcurrentQueue<byte[]>();
-        textMessageQueue = new ConcurrentQueue<InTextMessage>();
-        interopOutQueue = new ConcurrentQueue<InteropMessage>();
-        interopInQueue = new ConcurrentQueue<InteropMessage>();
-
-        receivedMessageQueue = new ConcurrentQueue<ServerMessage>();
-        lastInteropWriteTime = 0;
-
-        threadException = null;
-
-        //Create the plugin directory if it doesn't exist
-        if (!Directory.Exists(PLUGIN_DIRECTORY))
-        {
-            Directory.CreateDirectory(PLUGIN_DIRECTORY);
-        }
-
-        //Create a thread to handle chat
-        chatThread = new Thread(new ThreadStart(handleChat));
-        chatThread.Start();
-
-        //Create a thread to handle client interop
-        interopThread = new Thread(new ThreadStart(handlePluginInterop));
-        interopThread.Start();
-
-        //Create a thread to handle disconnection
-        connectionThread = new Thread(new ThreadStart(connectionThreadRun));
-        connectionThread.Start();
+        TextMessageQueue = new ConcurrentQueue<InTextMessage>();
+        InteropOutQueue = new ConcurrentQueue<InteropMessage>();
+        InteropInQueue = new ConcurrentQueue<InteropMessage>();
+        ReceivedMessageQueue = new ConcurrentQueue<ServerMessage>();
+        LastInteropWriteTime = 0;
+        ClientThreadException = null;
+        if (!Directory.Exists(PluginDirectory))
+            Directory.CreateDirectory(PluginDirectory);
+        ChatThread = new Thread(new ThreadStart(HandleChat));
+        ChatThread.Start();
+        InteropThread = new Thread(new ThreadStart(HandlePluginInterop));
+        InteropThread.Start();
+        ConnectionThread = new Thread(new ThreadStart(ConnectionThreadRun));
+        ConnectionThread.Start();
     }
 
-    protected override void connectionEnded()
+    protected override void ConnectionEnded()
     {
-        base.connectionEnded();
-
-        //Abort all threads
-        safeAbort(chatThread, true);
-        safeAbort(connectionThread, true);
-        safeAbort(interopThread, true);
+        base.ConnectionEnded();
+        SafeAbort(ChatThread, true);
+        SafeAbort(ConnectionThread, true);
+        SafeAbort(InteropThread, true);
     }
 
-    protected override void sendClientInteropMessage(KLFCommon.ClientInteropMessageID id, byte[] data)
+    protected override void SendClientInteropMessage(KLFCommon.ClientInteropMessageID id, byte[] data)
     {
         InteropMessage message = new InteropMessage();
         message.id = (int)id;
         message.data = data;
-
-        interopOutQueue.Enqueue(message);
-
+        InteropOutQueue.Enqueue(message);
         //Enforce max queue size
-        while (interopOutQueue.Count > INTEROP_MAX_QUEUE_SIZE)
-        {
-            if (!interopOutQueue.TryDequeue(out message))
+        while (InteropOutQueue.Count > InteropMaxQueueSize)
+            if (!InteropOutQueue.TryDequeue(out message))
                 break;
-        }
     }
 
-    void safeAbort(Thread thread, bool join = false)
+    void SafeAbort(Thread thread, bool join = false)
     {
         if (thread != null)
         {
@@ -209,63 +154,53 @@ class ConsoleClient : Client
         }
     }
 
-    protected override void enqueueTextMessage(InTextMessage message, bool to_plugin = true)
+    protected override void EnqueueTextMessage(InTextMessage message, bool toPlugin = true)
     {
         //Dequeue an old text message if there are a lot of messages backed up
-        if (textMessageQueue.Count >= MAX_TEXT_MESSAGE_QUEUE)
+        if (TextMessageQueue.Count >= MaxTextMessageQueue)
         {
-            InTextMessage old_message;
-            textMessageQueue.TryDequeue(out old_message);
+            InTextMessage oldMessage;
+            TextMessageQueue.TryDequeue(out oldMessage);
         }
-
-        textMessageQueue.Enqueue(message);
-
-        base.enqueueTextMessage(message, to_plugin);
+        TextMessageQueue.Enqueue(message);
+        base.EnqueueTextMessage(message, toPlugin);
     }
 
-    protected override void messageReceived(KLFCommon.ServerMessageID id, byte[] data)
+    protected override void MessageReceived(KLFCommon.ServerMessageID id, byte[] data)
     {
         ServerMessage message;
         message.id = id;
         message.data = data;
-
-        receivedMessageQueue.Enqueue(message);
+        ReceivedMessageQueue.Enqueue(message);
     }
 
-    protected void passExceptionToMain(Exception e)
+    protected void PassExceptionToMain(Exception e)
     {
-        lock (threadExceptionLock)
+        lock (ThreadExceptionLock)
         {
-            if (threadException == null)
-                threadException = e;
+            if (ClientThreadException == null)
+                ClientThreadException = e;
         }
     }
 
     //Threads
-
-    bool writePluginInterop()
+    bool WritePluginInterop()
     {
         bool success = false;
-
-        if (interopOutQueue.Count > 0 && !File.Exists(INTEROP_CLIENT_FILENAME))
+        if (InteropOutQueue.Count > 0 && !File.Exists(InteropClientFilename))
         {
             FileStream stream = null;
             try
             {
-
-                stream = File.OpenWrite(INTEROP_CLIENT_FILENAME);
-
-                //Write file format version
-                stream.Write(KLFCommon.intToBytes(KLFCommon.FILE_FORMAT_VERSION), 0, 4);
-
+                stream = File.OpenWrite(InteropClientFilename);
+                stream.Write(KLFCommon.IntToBytes(KLFCommon.FileFormatVersion), 0, 4);
                 success = true;
-
-                while (interopOutQueue.Count > 0)
+                while (InteropOutQueue.Count > 0)
                 {
                     InteropMessage message;
-                    if (interopOutQueue.TryDequeue(out message))
+                    if (InteropOutQueue.TryDequeue(out message))
                     {
-                        byte[] bytes = encodeInteropMessage(message.id, message.data);
+                        byte[] bytes = EncodeInteropMessage(message.id, message.data);
                         stream.Write(bytes, 0, bytes.Length);
                     }
                     else
@@ -284,284 +219,215 @@ class ConsoleClient : Client
             }
 
         }
-
         return success;
     }
 
-    void connectionThreadRun()
+    void ConnectionThreadRun()
     {
         try
         {
-
             while (true)
             {
-                if (pingStopwatch.IsRunning && pingStopwatch.ElapsedMilliseconds > PING_TIMEOUT_DELAY)
+                if (PingStopwatch.IsRunning && PingStopwatch.ElapsedMilliseconds > PingTimeoutDelay)
                 {
-                    enqueueTextMessage("Ping timed out.", true);
-                    pingStopwatch.Stop();
-                    pingStopwatch.Reset();
+                    EnqueueTextMessage("Ping timed out.", true);
+                    PingStopwatch.Stop();
+                    PingStopwatch.Reset();
                 }
-
                 //Handle received messages
-                while (receivedMessageQueue.Count > 0)
+                while (ReceivedMessageQueue.Count > 0)
                 {
                     ServerMessage message;
-                    if (receivedMessageQueue.TryDequeue(out message))
-                        handleMessage(message.id, message.data);
+                    if (ReceivedMessageQueue.TryDequeue(out message))
+                        HandleMessage(message.id, message.data);
                     else
                         break;
                 }
-
-                handleConnection();
-
-                Thread.Sleep(SLEEP_TIME);
+                HandleConnection();
+                Thread.Sleep(SleepTime);
             }
-
         }
         catch (ThreadAbortException)
         {
         }
         catch (Exception e)
         {
-            passExceptionToMain(e);
+            PassExceptionToMain(e);
         }
     }
 
-    void readPluginInterop()
+    void ReadPluginInterop()
     {
-
         byte[] bytes = null;
-
-        if (File.Exists(INTEROP_PLUGIN_FILENAME))
+        if (File.Exists(InteropPluginFilename))
         {
-
             try
             {
-                bytes = File.ReadAllBytes(INTEROP_PLUGIN_FILENAME);
-                File.Delete(INTEROP_PLUGIN_FILENAME);
+                bytes = File.ReadAllBytes(InteropPluginFilename);
+                File.Delete(InteropPluginFilename);
             }
-            catch (System.IO.FileNotFoundException)
-            {
-            }
-            catch (System.UnauthorizedAccessException)
-            {
-            }
-            catch (System.IO.DirectoryNotFoundException)
-            {
-            }
-            catch (System.InvalidOperationException)
-            {
-            }
-            catch (System.IO.IOException)
-            {
-            }
-
+            catch (System.IO.FileNotFoundException) {}
+            catch (System.UnauthorizedAccessException) {}
+            catch (System.IO.DirectoryNotFoundException) {}
+            catch (System.InvalidOperationException) {}
+            catch (System.IO.IOException) {}
         }
 
         if (bytes != null && bytes.Length > 0)
         {
-            //Read the file-format version
-            int file_version = KLFCommon.intFromBytes(bytes, 0);
-
-            if (file_version != KLFCommon.FILE_FORMAT_VERSION)
+            int fileVersion = KLFCommon.BytesToInt(bytes, 0);
+            if (fileVersion != KLFCommon.FileFormatVersion)
             {
-                //Incompatible client version
                 Console.WriteLine("KLF Client incompatible with plugin");
                 return;
             }
-
             //Parse the messages
             int index = 4;
-            while (index < bytes.Length - KLFCommon.INTEROP_MSG_HEADER_LENGTH)
+            while (index < bytes.Length - KLFCommon.InteropMessageHeaderLength)
             {
-                //Read the message id
-                int id_int = KLFCommon.intFromBytes(bytes, index);
-
-                KLFCommon.PluginInteropMessageID id = KLFCommon.PluginInteropMessageID.NULL;
-                if (id_int >= 0 && id_int < Enum.GetValues(typeof(KLFCommon.PluginInteropMessageID)).Length)
-                    id = (KLFCommon.PluginInteropMessageID)id_int;
-
-                //Read the length of the message data
-                int data_length = KLFCommon.intFromBytes(bytes, index + 4);
-
-                index += KLFCommon.INTEROP_MSG_HEADER_LENGTH;
-
-                if (data_length <= 0)
-                    handleInteropMessage(id, null);
-                else if (data_length <= (bytes.Length - index))
+                int idInt = KLFCommon.BytesToInt(bytes, index);//read id
+                KLFCommon.PluginInteropMessageID id = KLFCommon.PluginInteropMessageID.Null;
+                if (idInt >= 0 && idInt < Enum.GetValues(typeof(KLFCommon.PluginInteropMessageID)).Length)
+                    id = (KLFCommon.PluginInteropMessageID)idInt;
+                int dataLength = KLFCommon.BytesToInt(bytes, index + 4);//length of message
+                index += KLFCommon.InteropMessageHeaderLength;
+                if (dataLength <= 0)
+                    HandleInteropMessage(id, null);
+                else if (dataLength <= (bytes.Length - index))
                 {
-
-                    //Copy the message data
-                    byte[] data = new byte[data_length];
+                    byte[] data = new byte[dataLength];
                     Array.Copy(bytes, index, data, 0, data.Length);
-
-                    handleInteropMessage(id, data);
+                    HandleInteropMessage(id, data);
                 }
-
-                if (data_length > 0)
-                    index += data_length;
+                if (dataLength > 0)
+                    index += dataLength;
             }
         }
 
-        while (interopInQueue.Count > 0)
+        while (InteropInQueue.Count > 0)
         {
             InteropMessage message;
-            if (interopInQueue.TryDequeue(out message))
-                handleInteropMessage(message.id, message.data);
+            if (InteropInQueue.TryDequeue(out message))
+                HandleInteropMessage(message.id, message.data);
             else
                 break;
         }
-
     }
 
-    void handlePluginInterop()
+    void HandlePluginInterop()
     {
         try
         {
-
             while (true)
             {
-                writeClientData();
-
-                readPluginInterop();
-
-                if (stopwatch.ElapsedMilliseconds - lastInteropWriteTime >= INTEROP_WRITE_INTERVAL)
-                {
-                    if (writePluginInterop())
-                        lastInteropWriteTime = stopwatch.ElapsedMilliseconds;
-                }
-
-                throttledShareScreenshots();
-
-                Thread.Sleep(SLEEP_TIME);
+                WriteClientData();
+                ReadPluginInterop();
+                if (ClientStopwatch.ElapsedMilliseconds - LastInteropWriteTime >= InteropWriteInterval)
+                    if (WritePluginInterop())
+                        LastInteropWriteTime = ClientStopwatch.ElapsedMilliseconds;
+                ThrottledShareScreenshots();
+                Thread.Sleep(SleepTime);
             }
-
         }
-        catch (ThreadAbortException)
-        {
-        }
+        catch (ThreadAbortException) {}
         catch (Exception e)
         {
-            passExceptionToMain(e);
+            PassExceptionToMain(e);
         }
     }
 
-    void handlePluginUpdates()
+    void HandlePluginUpdates()
     {
         try
         {
-
             while (true)
             {
-                writeClientData();
-
-                int sleep_time = 0;
-                lock (serverSettingsLock)
+                WriteClientData();
+                int sleepTime = 0;
+                lock (ServerSettingsLock)
                 {
-                    sleep_time = updateInterval;
+                    sleepTime = UpdateInterval;
                 }
-
-                Thread.Sleep(sleep_time);
+                Thread.Sleep(sleepTime);
             }
-
         }
-        catch (ThreadAbortException)
-        {
-        }
+        catch (ThreadAbortException) {}
         catch (Exception e)
         {
-            passExceptionToMain(e);
+            PassExceptionToMain(e);
         }
     }
 
-    void handleChat()
+    void HandleChat()
     {
-
         try
         {
-
             StringBuilder sb = new StringBuilder();
-
             while (true)
             {
-
                 //Handle outgoing messsages
                 if (Console.KeyAvailable)
                 {
                     ConsoleKeyInfo key = Console.ReadKey();
-
                     switch (key.Key)
                     {
+                        case ConsoleKey.Enter:
+                            String line = sb.ToString();
+                            HandleChatInput(line);
+                            sb.Clear();
+                            Console.WriteLine();
+                            break;
 
-                    case ConsoleKey.Enter:
+                        case ConsoleKey.Backspace:
+                        case ConsoleKey.Delete:
+                            if (sb.Length > 0)
+                            {
+                                sb.Remove(sb.Length - 1, 1);
+                                Console.Write(' ');
+                                if (Console.CursorLeft > 0)
+                                    Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
+                            }
+                            break;
 
-                        String line = sb.ToString();
-
-                        handleChatInput(line);
-
-                        sb.Clear();
-                        Console.WriteLine();
-                        break;
-
-                    case ConsoleKey.Backspace:
-                    case ConsoleKey.Delete:
-                        if (sb.Length > 0)
-                        {
-                            sb.Remove(sb.Length - 1, 1);
-                            Console.Write(' ');
-                            if (Console.CursorLeft > 0)
+                        default:
+                            if (key.KeyChar != '\0')
+                                sb.Append(key.KeyChar);
+                            else if (Console.CursorLeft > 0)
                                 Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
-                        }
-                        break;
-
-                    default:
-                        if (key.KeyChar != '\0')
-                            sb.Append(key.KeyChar);
-                        else if (Console.CursorLeft > 0)
-                            Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
-                        break;
-
+                            break;
                     }
                 }
-
+                //Handle incoming messages
                 if (sb.Length == 0)
                 {
-                    //Handle incoming messages
                     try
                     {
-                        while (textMessageQueue.Count > 0)
+                        while (TextMessageQueue.Count > 0)
                         {
                             InTextMessage message;
-                            if (textMessageQueue.TryDequeue(out message))
+                            if (TextMessageQueue.TryDequeue(out message))
                             {
-                                if (message.fromServer)
+                                if (message.FromServer)
                                 {
                                     Console.ForegroundColor = ConsoleColor.Green;
                                     Console.Write("[Server] ");
                                     Console.ResetColor();
                                 }
-
                                 Console.WriteLine(message.message);
                             }
                             else
                                 break;
                         }
                     }
-                    catch (System.IO.IOException)
-                    {
-                    }
+                    catch (System.IO.IOException) {}
                 }
-
-                Thread.Sleep(SLEEP_TIME);
+                Thread.Sleep(SleepTime);
             }
-
         }
-        catch (ThreadAbortException)
-        {
-        }
+        catch (ThreadAbortException) {}
         catch (Exception e)
         {
-            passExceptionToMain(e);
+            PassExceptionToMain(e);
         }
     }
 }

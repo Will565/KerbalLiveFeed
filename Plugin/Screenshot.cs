@@ -5,74 +5,62 @@ using System.Text;
 
 class Screenshot
 {
-    public int index;
-    public string player;
-    public string description;
-    public byte[] image;
+    public int Index;
+    public string Player;
+    public string Description;
+    public byte[] Image;
 
     public Screenshot()
     {
-        index = 0;
-        player = "";
-        description = "";
+        Index = 0;
+        Player = "";
+        Description = "";
     }
 
-    public void clear()
+    public void Clear()
     {
-        index = 0;
-        player = "";
-        description = "";
-        image = null;
+        Index = 0;
+        Player = "";
+        Description = "";
+        Image = null;
     }
 
-    public void setFromByteArray(byte[] bytes, bool meta_only = false) {
-        UnicodeEncoding encoding = new UnicodeEncoding();
-
-        int array_index = 0;
-        index = KLFCommon.intFromBytes(bytes, array_index);
-        array_index += 4;
-
-        int string_size = KLFCommon.intFromBytes(bytes, array_index);
-        array_index += 4;
-
-        player = encoding.GetString(bytes, array_index, string_size);
-        array_index += string_size;
-
-        string_size = KLFCommon.intFromBytes(bytes, array_index);
-        array_index += 4;
-
-        description = encoding.GetString(bytes, array_index, string_size);
-        array_index += string_size;
-
-        image = new byte[bytes.Length-array_index];
-        Array.Copy(bytes, array_index, image, 0, image.Length);
-    }
-
-    public byte[] toByteArray()
+    public void SetFromByteArray(byte[] bytes, bool metaOnly = false)
     {
         UnicodeEncoding encoding = new UnicodeEncoding();
-        byte[] player_bytes = encoding.GetBytes(player);
-        byte[] description_bytes = encoding.GetBytes(description);
-        byte[] bytes = new byte[12 + player_bytes.Length + description_bytes.Length + image.Length];
+        int arIndex = 0;
+        Index = KLFCommon.BytesToInt(bytes, arIndex);
+        arIndex += 4;
+        int StringSize = KLFCommon.BytesToInt(bytes, arIndex);
+        arIndex += 4;
+        Player = encoding.GetString(bytes, arIndex, StringSize);
+        arIndex += StringSize;
+        StringSize = KLFCommon.BytesToInt(bytes, arIndex);
+        arIndex += 4;
+        Description = encoding.GetString(bytes, arIndex, StringSize);
+        arIndex += StringSize;
+        Image = new byte[bytes.Length-arIndex];
+        Array.Copy(bytes, arIndex, Image, 0, Image.Length);
+    }
 
-        int array_index = 0;
-        KLFCommon.intToBytes(index).CopyTo(bytes, array_index);
-        array_index += 4;
-
-        KLFCommon.intToBytes(player_bytes.Length).CopyTo(bytes, array_index);
-        array_index += 4;
-
-        player_bytes.CopyTo(bytes, array_index);
-        array_index += player_bytes.Length;
-
-        KLFCommon.intToBytes(description_bytes.Length).CopyTo(bytes, array_index);
-        array_index += 4;
-
-        description_bytes.CopyTo(bytes, array_index);
-        array_index += description_bytes.Length;
-
-        image.CopyTo(bytes, array_index);
-
+    public byte[] ToByteArray()
+    {
+        UnicodeEncoding encoding = new UnicodeEncoding();
+        byte[] playerBytes = encoding.GetBytes(Player);
+        byte[] descBytes = encoding.GetBytes(Description);
+        byte[] bytes = new byte[12 + playerBytes.Length + descBytes.Length + Image.Length];
+        int arIndex = 0;
+        KLFCommon.IntToBytes(Index).CopyTo(bytes, arIndex);
+        arIndex += 4;
+        KLFCommon.IntToBytes(playerBytes.Length).CopyTo(bytes, arIndex);
+        arIndex += 4;
+        playerBytes.CopyTo(bytes, arIndex);
+        arIndex += playerBytes.Length;
+        KLFCommon.IntToBytes(descBytes.Length).CopyTo(bytes, arIndex);
+        arIndex += 4;
+        descBytes.CopyTo(bytes, arIndex);
+        arIndex += descBytes.Length;
+        Image.CopyTo(bytes, arIndex);
         return bytes;
     }
 }

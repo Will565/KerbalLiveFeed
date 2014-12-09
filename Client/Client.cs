@@ -12,201 +12,159 @@ using System.IO;
 
 abstract class Client
 {
-    public struct InTextMessage
+    //Constants
+    public const String CraftFileExtension = ".craft";
+    public const int MaxTextMessageQueue = 256;
+    public const long KeepAliveDelay = 1000;
+    public const long UdpProbeDelay = 1000;
+    public const long UdpTimeoutDelay = 20000;
+    public const int SleepTime = 15;
+    public const int ClientDataForceWriteInterval = 10000;
+    public const int ReconnectDelay = 1000;
+    public const int MaxReconnectAttempts = 3;
+    public const long PingTimeoutDelay = 10000;
+    public const int InteropWriteInterval = 100;
+    public const int InteropMaxQueueSize = 128;
+    public const int MaxQueuedChatLines = 8;
+    public const int MaxCachedScreenshots = 8;
+    public const int DefaultPort = 2075;
+    public const String InteropClientFilename = "GameData/KLF/Plugins/PluginData/KerbalLiveFeed/interopclient.txt";
+    public const String InteropPluginFilename = "GameData/KLF/Plugins/PluginData/KerbalLiveFeed/interopplugin.txt";
+    public const String PluginDirectory = "GameData/KLF/Plugins/PluginData/KerbalLiveFeed/";
+
+    //Static
+    public static UnicodeEncoding Encoder = new UnicodeEncoding();
+
+    //Connection
+    private ClientSettings ClientConfiguration;
+    public int ClientID;
+    public bool EndSession;
+    public bool IntentionalConnectionEnd;
+    public bool HandshakeComplete;
+    public TcpClient TcpConnection;
+    public long LastTcpMessageSendTime;
+    public Socket UdpSocket;
+    public bool UdpConnected;
+    public long LastUdpMessageSendTime;
+    public long LastUdpAckReceiveTime;
+    public bool IsConnected
     {
-        public bool fromServer;
-        public String message;
+        get
+        {
+            return !EndSession && TcpConnection != null && !IntentionalConnectionEnd && TcpConnection.Connected;
+        }
     }
 
+    //Server Settings
+    public int UpdateInterval = 500;
+    public int ScreenshotInterval = 1000;
+    public byte InactiveShipsPerUpdate = 0;
+    public ScreenshotSettings ScreenshotConfiguration = new ScreenshotSettings();
+    protected long LastScreenshotShareTime;
+    protected byte[] QueuedOutScreenshot;
+    protected List<Screenshot> CachedScreenshots;
+    protected String CurrentGameTitle;
+    protected int WatchPlayerIndex;
+    protected String WatchPlayerName;
+    protected long LastClientDataWriteTime;
+    protected long LastClientDataChangeTime;
+
+    //Messages
+    protected byte[] CurrentMessageHeader = new byte[KLFCommon.MessageHeaderLength];
+    protected int CurrentMessageHeaderIndex;
+    protected byte[] CurrentMessageData;
+    protected int CurrentMessageDataIndex;
+    protected KLFCommon.ServerMessageID CurrentMessageID;
+    protected byte[] ReceiveBuffer = new byte[8192];
+    protected int ReceiveIndex = 0;
+    protected int ReceiveHandleIndex = 0;
+
+    //Threading
+    protected object TcpSendLock = new object();
+    protected object ServerSettingsLock = new object();
+    protected object ScreenshotOutLock = new object();
+    protected object ThreadExceptionLock = new object();
+    protected object ClientDataLock = new object();
+    protected object UdpTimestampLock = new object();
+
+    protected Stopwatch ClientStopwatch;
+    protected Stopwatch PingStopwatch = new Stopwatch();
+
+    //Structs
+    public struct InTextMessage
+    {
+        public bool FromServer;
+        public String message;
+    }
     public struct InteropMessage
     {
         public int id;
         public byte[] data;
     }
-
     public struct ServerMessage
     {
         public KLFCommon.ServerMessageID id;
         public byte[] data;
     }
 
-    //Constants
-    public const String CRAFT_FILE_EXTENSION = ".craft";
-
-    public const int MAX_TEXT_MESSAGE_QUEUE = 128;
-    public const long KEEPALIVE_DELAY = 2000;
-    public const long UDP_PROBE_DELAY = 1000;
-    public const long UDP_TIMEOUT_DELAY = 8000;
-    public const int SLEEP_TIME = 15;
-    public const int CLIENT_DATA_FORCE_WRITE_INTERVAL = 10000;
-    public const int RECONNECT_DELAY = 1000;
-    public const int MAX_RECONNECT_ATTEMPTS = 3;
-    public const long PING_TIMEOUT_DELAY = 10000;
-
-    public const int INTEROP_WRITE_INTERVAL = 100;
-    public const int INTEROP_MAX_QUEUE_SIZE = 128;
-
-    public const int MAX_QUEUED_CHAT_LINES = 8;
-    public const int MAX_CACHED_SCREENSHOTS = 8;
-    public const int DEFAULT_PORT = 2075;
-
-    public const String INTEROP_CLIENT_FILENAME = "GameData/KLF/Plugins/PluginData/KerbalLiveFeed/interopclient.txt";
-    public const String INTEROP_PLUGIN_FILENAME = "GameData/KLF/Plugins/PluginData/KerbalLiveFeed/interopplugin.txt";
-    public const String PLUGIN_DIRECTORY = "GameData/KLF/Plugins/PluginData/KerbalLiveFeed/";
-
-    public static UnicodeEncoding encoder = new UnicodeEncoding();
-
-    private ClientSettings clientSettings;
-
-    //Connection
-    public int clientID;
-    public bool endSession;
-    public bool intentionalConnectionEnd;
-    public bool handshakeCompleted;
-    public TcpClient tcpClient;
-    public long lastTCPMessageSendTime;
-    public bool quitHelperMessageShow;
-    public Socket udpSocket;
-    public bool udpConnected;
-    public long lastUDPMessageSendTime;
-    public long lastUDPAckReceiveTime;
-
-    //Server Settings
-    public int updateInterval = 500;
-    public int screenshotInterval = 1000;
-    public byte inactiveShipsPerUpdate = 0;
-    public ScreenshotSettings screenshotSettings = new ScreenshotSettings();
-
-    protected long lastScreenshotShareTime;
-
-    protected byte[] queuedOutScreenshot;
-    protected List<Screenshot> cachedScreenshots;
-
-    protected String currentGameTitle;
-    protected int watchPlayerIndex;
-    protected String watchPlayerName;
-
-    protected long lastClientDataWriteTime;
-    protected long lastClientDataChangeTime;
-
-    //Messages
-
-    protected byte[] currentMessageHeader = new byte[KLFCommon.MSG_HEADER_LENGTH];
-    protected int currentMessageHeaderIndex;
-    protected byte[] currentMessageData;
-    protected int currentMessageDataIndex;
-    protected KLFCommon.ServerMessageID currentMessageID;
-
-    protected byte[] receiveBuffer = new byte[8192];
-    protected int receiveIndex = 0;
-    protected int receiveHandleIndex = 0;
-
-    //Threading
-
-    protected object tcpSendLock = new object();
-    protected object serverSettingsLock = new object();
-    protected object screenshotOutLock = new object();
-    protected object threadExceptionLock = new object();
-    protected object clientDataLock = new object();
-    protected object udpTimestampLock = new object();
-
-    protected Stopwatch stopwatch;
-    protected Stopwatch pingStopwatch = new Stopwatch();
-
+    //Constructor
     public Client()
     {
-        stopwatch = new Stopwatch();
-        stopwatch.Start();
+        ClientStopwatch = new Stopwatch();
+        ClientStopwatch.Start();
     }
 
-    public bool isConnected
+    /* Attempt to connect */
+    public bool ConnectToServer(ClientSettings settings)
     {
-        get
-        {
-            return !endSession && tcpClient != null && !intentionalConnectionEnd && tcpClient.Connected;
-        }
-    }
-
-    public bool connectToServer(ClientSettings settings)
-    {
-        if (isConnected)
+        if (IsConnected)
             return false;
+        ClientConfiguration = settings;
+        TcpConnection = new TcpClient();
+        String host = ClientConfiguration.GetDefaultServer().Host;
+        Int32 port = ClientConfiguration.GetDefaultServer().Port;
 
-        clientSettings = settings;
+        //attempt to resolve dns
+        IPHostEntry hostEntry = new IPHostEntry();
+        try { hostEntry = Dns.GetHostEntry(host); }
+        catch (SocketException) { hostEntry = null; }
+        catch (ArgumentException) { hostEntry = null; }
 
-        tcpClient = new TcpClient();
-
-        //Look for a port-number in the hostname
-        int port = DEFAULT_PORT;
-        String trimmed_hostname = clientSettings.hostname;
-
-        int port_start_index = clientSettings.hostname.LastIndexOf(':');
-        if (port_start_index >= 0 && port_start_index < (clientSettings.hostname.Length - 1))
-        {
-            String port_substring = clientSettings.hostname.Substring(port_start_index + 1);
-            if (!int.TryParse(port_substring, out port) || port < IPEndPoint.MinPort || port > IPEndPoint.MaxPort)
-                port = DEFAULT_PORT;
-
-            trimmed_hostname = clientSettings.hostname.Substring(0, port_start_index);
-        }
-
-        //Look up the actual IP address
-        IPHostEntry host_entry = new IPHostEntry();
-        try
-        {
-            host_entry = Dns.GetHostEntry(trimmed_hostname);
-        }
-        catch (SocketException)
-        {
-            host_entry = null;
-        }
-        catch (ArgumentException)
-        {
-            host_entry = null;
-        }
-
+        //get an IP address
         IPAddress address = null;
-        if (host_entry != null && host_entry.AddressList.Length == 1)
-            address = host_entry.AddressList.First();
+        if (hostEntry != null && hostEntry.AddressList.Length == 1)//too strict?
+            address = hostEntry.AddressList.First();
         else
-            IPAddress.TryParse(trimmed_hostname, out address);
-
+            IPAddress.TryParse(host, out address);
         if (address == null)
         {
             Console.WriteLine("Invalid server address.");
             return false;
         }
 
-        IPEndPoint endpoint = new IPEndPoint(address, port);
-
+        //make the connection
+        IPEndPoint endPoint = new IPEndPoint(address, port);
         Console.WriteLine("Connecting to server...");
-
         try
         {
-            tcpClient.Connect(endpoint);
-
-            if (tcpClient.Connected) {
-
-                //Init udp socket
+            TcpConnection.Connect(endPoint);
+            if (TcpConnection.Connected)
+            {
                 try
                 {
-                    udpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                    udpSocket.Connect(endpoint);
+                    UdpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                    UdpSocket.Connect(endPoint);
                 }
                 catch
                 {
-                    if (udpSocket != null)
-                        udpSocket.Close();
-
-                    udpSocket = null;
+                    if (UdpSocket != null)
+                        UdpSocket.Close();
+                    UdpSocket = null;
                 }
-
-                udpConnected = false;
-                lastUDPAckReceiveTime = 0;
-                lastUDPMessageSendTime = stopwatch.ElapsedMilliseconds;
-
-                connectionStarted();
-
+                UdpConnected = false;
+                LastUdpAckReceiveTime = 0;
+                LastUdpMessageSendTime = ClientStopwatch.ElapsedMilliseconds;
+                ConnectionStarted();
                 return true;
             }
         }
@@ -218,546 +176,452 @@ abstract class Client
         {
             Console.WriteLine("Exception: " + e.ToString());
         }
-
         return false;
     }
 
-    public void endConnection()
+    /* initialize */
+    protected virtual void ConnectionStarted()
     {
-        connectionEnded();
+        ClientID = -1;
+        EndSession = false;
+        IntentionalConnectionEnd = false;
+        HandshakeComplete = false;
+        CachedScreenshots = new List<Screenshot>();
+        CurrentGameTitle = String.Empty;
+        WatchPlayerName = String.Empty;
+        LastScreenshotShareTime = 0;
+        LastTcpMessageSendTime = 0;
+        LastClientDataWriteTime = 0;
+        LastClientDataChangeTime = ClientStopwatch.ElapsedMilliseconds;
+        BeginAsyncRead();
     }
 
-    protected virtual void connectionStarted() {
-
-        clientID = -1;
-        endSession = false;
-        intentionalConnectionEnd = false;
-        handshakeCompleted = false;
-
-        cachedScreenshots = new List<Screenshot>();
-
-        currentGameTitle = String.Empty;
-        watchPlayerName = String.Empty;
-        lastScreenshotShareTime = 0;
-        lastTCPMessageSendTime = 0;
-        lastClientDataWriteTime = 0;
-        lastClientDataChangeTime = stopwatch.ElapsedMilliseconds;
-
-        quitHelperMessageShow = true;
-
-        beginAsyncRead();
+    /* overridable */
+    protected virtual void ConnectionEnded()
+    {
+        ClearConnectionState();
     }
 
-    protected virtual void connectionEnded()
+    protected void HandleMessage(KLFCommon.ServerMessageID id, byte[] data)
     {
-        clearConnectionState();
-    }
-
-    protected void handleMessage(KLFCommon.ServerMessageID id, byte[] data)
-    {
-
         switch (id)
         {
-        case KLFCommon.ServerMessageID.HANDSHAKE:
-
-            Int32 protocol_version = KLFCommon.intFromBytes(data);
-
+        case KLFCommon.ServerMessageID.Handshake:
+            Int32 protocolVersion = KLFCommon.BytesToInt(data);
             if (data.Length >= 8)
             {
-                Int32 server_version_length = KLFCommon.intFromBytes(data, 4);
-
+                Int32 server_version_length = KLFCommon.BytesToInt(data, 4);
                 if (data.Length >= 12 + server_version_length)
                 {
-                    String server_version = encoder.GetString(data, 8, server_version_length);
-                    clientID = KLFCommon.intFromBytes(data, 8 + server_version_length);
-
+                    String server_version = Encoder.GetString(data, 8, server_version_length);
+                    ClientID = KLFCommon.BytesToInt(data, 8 + server_version_length);
                     Console.WriteLine("Handshake received. Server is running version: " + server_version);
                 }
             }
-
             //End the session if the protocol versions don't match
-            if (protocol_version != KLFCommon.NET_PROTOCOL_VERSION)
+            if (protocolVersion != KLFCommon.NetProtocolVersion)
             {
                 Console.WriteLine("Server version is incompatible with client version.");
-                endSession = true;
-                intentionalConnectionEnd = true;
+                EndSession = true;
+                IntentionalConnectionEnd = true;
             }
             else
             {
-                sendHandshakeMessage(); //Reply to the handshake
-                lock (udpTimestampLock)
+                SendHandshakeMessage(); //Reply to the handshake
+                lock (UdpTimestampLock)
                 {
-                    lastUDPMessageSendTime = stopwatch.ElapsedMilliseconds;
+                    LastUdpMessageSendTime = ClientStopwatch.ElapsedMilliseconds;
                 }
-                handshakeCompleted = true;
+                HandshakeComplete = true;
             }
-
             break;
 
-        case KLFCommon.ServerMessageID.HANDSHAKE_REFUSAL:
-
-            String refusal_message = encoder.GetString(data, 0, data.Length);
-
-            endSession = true;
-            intentionalConnectionEnd = true;
-
-            enqueuePluginChatMessage("Server refused connection. Reason: " + refusal_message, true);
-
+        case KLFCommon.ServerMessageID.HandshakeRefusal:
+            String refusal_message = Encoder.GetString(data, 0, data.Length);
+            EndSession = true;
+            IntentionalConnectionEnd = true;
+            EnqueuePluginChatMessage("Server refused connection. Reason: " + refusal_message, true);
             break;
 
-        case KLFCommon.ServerMessageID.SERVER_MESSAGE:
-        case KLFCommon.ServerMessageID.TEXT_MESSAGE:
-
+        case KLFCommon.ServerMessageID.ServerMessage:
+        case KLFCommon.ServerMessageID.TextMessage:
             if (data != null)
             {
-
-                InTextMessage in_message = new InTextMessage();
-
-                in_message.fromServer = (id == KLFCommon.ServerMessageID.SERVER_MESSAGE);
-                in_message.message = encoder.GetString(data, 0, data.Length);
-
+                InTextMessage inMessage = new InTextMessage();
+                inMessage.FromServer = (id == KLFCommon.ServerMessageID.ServerMessage);
+                inMessage.message = Encoder.GetString(data, 0, data.Length);
                 //Queue the message
-                enqueueTextMessage(in_message);
+                EnqueueTextMessage(inMessage);
             }
-
             break;
 
-        case KLFCommon.ServerMessageID.PLUGIN_UPDATE:
-
+        case KLFCommon.ServerMessageID.PluginUpdate:
             if (data != null)
-                sendClientInteropMessage(KLFCommon.ClientInteropMessageID.PLUGIN_UPDATE, data);
-
+                SendClientInteropMessage(KLFCommon.ClientInteropMessageID.PluginUpdate, data);
             break;
 
-        case KLFCommon.ServerMessageID.SERVER_SETTINGS:
-
-            lock (serverSettingsLock)
+        case KLFCommon.ServerMessageID.ServerSettings:
+            lock (ServerSettingsLock)
             {
-                if (data != null && data.Length >= KLFCommon.SERVER_SETTINGS_LENGTH && handshakeCompleted)
+                if (data != null && data.Length >= KLFCommon.ServerSettingsLength && HandshakeComplete)
                 {
-
-                    updateInterval = KLFCommon.intFromBytes(data, 0);
-                    screenshotInterval = KLFCommon.intFromBytes(data, 4);
-
-                    lock (clientDataLock)
+                    UpdateInterval = KLFCommon.BytesToInt(data, 0);
+                    ScreenshotInterval = KLFCommon.BytesToInt(data, 4);
+                    lock (ClientDataLock)
                     {
-                        int new_screenshot_height = KLFCommon.intFromBytes(data, 8);
-                        if (screenshotSettings.maxHeight != new_screenshot_height)
+                        int new_screenshot_height = KLFCommon.BytesToInt(data, 8);
+                        if (ScreenshotConfiguration.MaxHeight != new_screenshot_height)
                         {
-                            screenshotSettings.maxHeight = new_screenshot_height;
-                            lastClientDataChangeTime = stopwatch.ElapsedMilliseconds;
-                            enqueueTextMessage("Screenshot Height has been set to " + screenshotSettings.maxHeight);
+                            ScreenshotConfiguration.MaxHeight = new_screenshot_height;
+                            LastClientDataChangeTime = ClientStopwatch.ElapsedMilliseconds;
+                            EnqueueTextMessage("Screenshot Height has been set to " + ScreenshotConfiguration.MaxHeight);
                         }
-
-                        if (inactiveShipsPerUpdate != data[12])
+                        if (InactiveShipsPerUpdate != data[12])
                         {
-                            inactiveShipsPerUpdate = data[12];
-                            lastClientDataChangeTime = stopwatch.ElapsedMilliseconds;
+                            InactiveShipsPerUpdate = data[12];
+                            LastClientDataChangeTime = ClientStopwatch.ElapsedMilliseconds;
                         }
                     }
                 }
             }
-
             break;
 
-        case KLFCommon.ServerMessageID.SCREENSHOT_SHARE:
-            if (data != null && data.Length > 0 && data.Length < screenshotSettings.maxNumBytes
-                    && watchPlayerName.Length > 0)
+        case KLFCommon.ServerMessageID.ScreenshotShare:
+            if (data != null
+            && data.Length > 0
+            && data.Length < ScreenshotConfiguration.MaxNumBytes
+            && WatchPlayerName.Length > 0)
             {
                 //Cache the screenshot
                 Screenshot screenshot = new Screenshot();
-                screenshot.setFromByteArray(data);
-                cacheScreenshot(screenshot);
-
+                screenshot.SetFromByteArray(data);
+                CacheScreenshot(screenshot);
                 //Send the screenshot to the client
-                sendClientInteropMessage(KLFCommon.ClientInteropMessageID.SCREENSHOT_RECEIVE, data);
+                SendClientInteropMessage(KLFCommon.ClientInteropMessageID.ScreenshotReceive, data);
             }
             break;
 
-        case KLFCommon.ServerMessageID.CONNECTION_END:
-
+        case KLFCommon.ServerMessageID.ConnectionEnd:
             if (data != null)
             {
-                String message = encoder.GetString(data, 0, data.Length);
-
-                endSession = true;
-
+                String message = Encoder.GetString(data, 0, data.Length);
+                EndSession = true;
                 //If the reason is not a timeout, connection end is intentional
-                intentionalConnectionEnd = message.ToLower() != "timeout";
-
-                enqueuePluginChatMessage("Server closed the connection: " + message, true);
+                IntentionalConnectionEnd = message.ToLower() != "timeout";
+                EnqueuePluginChatMessage("Server closed the connection: " + message, true);
             }
 
             break;
 
-        case KLFCommon.ServerMessageID.UDP_ACKNOWLEDGE:
-            lock (udpTimestampLock)
+        case KLFCommon.ServerMessageID.UdpAcknowledge:
+            lock (UdpTimestampLock)
             {
-                lastUDPAckReceiveTime = stopwatch.ElapsedMilliseconds;
+                LastUdpAckReceiveTime = ClientStopwatch.ElapsedMilliseconds;
             }
             break;
 
-        case KLFCommon.ServerMessageID.CRAFT_FILE:
-
+        case KLFCommon.ServerMessageID.CraftFile:
             if (data != null && data.Length > 4)
             {
                 //Read craft name length
-                byte craft_type = data[0];
-                int craft_name_length = KLFCommon.intFromBytes(data, 1);
-                if (craft_name_length < data.Length - 5)
+                byte craftType = data[0];
+                int craftName_length = KLFCommon.BytesToInt(data, 1);
+                if (craftName_length < data.Length - 5)
                 {
                     //Read craft name
-                    String craft_name = encoder.GetString(data, 5, craft_name_length);
-
+                    String craftName = Encoder.GetString(data, 5, craftName_length);
                     //Read craft bytes
-                    byte[] craft_bytes = new byte[data.Length - craft_name_length - 5];
-                    Array.Copy(data, 5 + craft_name_length, craft_bytes, 0, craft_bytes.Length);
-
+                    byte[] craft_bytes = new byte[data.Length - craftName_length - 5];
+                    Array.Copy(data, 5 + craftName_length, craft_bytes, 0, craft_bytes.Length);
                     //Write the craft to a file
-                    String filename = getCraftFilename(craft_name, craft_type);
+                    String filename = GetCraftFilename(craftName, craftType);
                     if (filename != null)
                     {
                         try
                         {
                             File.WriteAllBytes(filename, craft_bytes);
-                            enqueueTextMessage("Received craft file: " + craft_name);
+                            EnqueueTextMessage("Received craft file: " + craftName);
                         }
                         catch
                         {
-                            enqueueTextMessage("Error saving received craft file: " + craft_name);
+                            EnqueueTextMessage("Error saving received craft file: " + craftName);
                         }
                     }
                     else
-                        enqueueTextMessage("Unable to save received craft file.");
+                        EnqueueTextMessage("Unable to save received craft file.");
                 }
             }
-
             break;
 
-        case KLFCommon.ServerMessageID.PING_REPLY:
-            if (pingStopwatch.IsRunning)
+        case KLFCommon.ServerMessageID.PingReply:
+            if (PingStopwatch.IsRunning)
             {
-                enqueueTextMessage("Ping Reply: " + pingStopwatch.ElapsedMilliseconds + "ms");
-                pingStopwatch.Stop();
-                pingStopwatch.Reset();
+                EnqueueTextMessage("Ping Reply: " + PingStopwatch.ElapsedMilliseconds + "ms");
+                PingStopwatch.Stop();
+                PingStopwatch.Reset();
             }
             break;
         }
     }
 
-    protected void clearConnectionState()
+    protected void ClearConnectionState()
     {
-
-        //Close the socket if it's still open
-        if (tcpClient != null)
-            tcpClient.Close();
-
-        if (udpSocket != null)
-            udpSocket.Close();
-
-        udpSocket = null;
+        if (TcpConnection != null)
+            TcpConnection.Close();
+        if (UdpSocket != null)
+            UdpSocket.Close();
+        UdpSocket = null;
     }
 
-    protected void handleChatInput(String line)
+    protected void HandleChatInput(String line)
     {
-        if (line.Length > 0)
+        if(line.Length > 0 && line.ElementAt(0) == '/')
         {
-            if (quitHelperMessageShow && (line == "q" || line == "Q"))
+            String[] InputArgs = line.Split(' ');
+            switch(InputArgs[0].ToLowerInvariant())
             {
-                Console.WriteLine();
-                enqueuePluginChatMessage("If you are trying to quit, use the /quit command.", true);
-                quitHelperMessageShow = false;
-            }
-
-            if (line.ElementAt(0) == '/')
-            {
-                String line_lower = line.ToLower();
-
-                if (line_lower == "/quit")
-                {
-                    intentionalConnectionEnd = true;
-                    endSession = true;
-                    sendConnectionEndMessage("Quit");
-                }
-                else if (line_lower == "/crash")
-                {
+                case "/quit":
+                    IntentionalConnectionEnd = true;
+                    EndSession = true;
+                    SendConnectionEndMessage("Quit");
+                    break;
+                case "/crash":
                     Object o = null;
                     o.ToString();
-                }
-                else if (line_lower == "/ping")
-                {
-                    if (!pingStopwatch.IsRunning)
+                    break;
+                case "/ping":
+                    if (!PingStopwatch.IsRunning)
                     {
-                        sendMessageTCP(KLFCommon.ClientMessageID.PING, null);
-                        pingStopwatch.Start();
+                        SendMessageTcp(KLFCommon.ClientMessageID.Ping, null);
+                        PingStopwatch.Start();
                     }
-                }
-                else if (line_lower.Length > (KLFCommon.SHARE_CRAFT_COMMAND.Length + 1)
-                         && line_lower.Substring(0, KLFCommon.SHARE_CRAFT_COMMAND.Length) == KLFCommon.SHARE_CRAFT_COMMAND)
-                {
-                    //Share a craft file
-                    String craft_name = line.Substring(KLFCommon.SHARE_CRAFT_COMMAND.Length + 1);
-                    byte craft_type = 0;
-                    String filename = findCraftFilename(craft_name, ref craft_type);
-
-                    if (filename != null && filename.Length > 0)
+                    break;
+                case KLFCommon.ShareCraftCommand:
+                    if(InputArgs.Length > 1)
                     {
-                        try
+                        String craftName = String.Join(" ", InputArgs, 1, InputArgs.Length - 2);
+                        byte craftType = 0;
+                        String filename = FindCraftFilename(craftName, ref craftType);
+                        if (filename != null && filename.Length > 0)
                         {
-                            byte[] craft_bytes = File.ReadAllBytes(filename);
-                            sendShareCraftMessage(craft_name, craft_bytes, craft_type);
+                            try
+                            {
+                                byte[] craftBytes = File.ReadAllBytes(filename);
+                                SendShareCraftMessage(craftName, craftBytes, craftType);
+                            }
+                            catch
+                            {
+                                EnqueueTextMessage("Error reading craft file: " + filename);
+                            }
                         }
-                        catch
-                        {
-                            enqueueTextMessage("Error reading craft file: " + filename);
-                        }
+                        else
+                            EnqueueTextMessage("Craft file not found: " + craftName);
                     }
-                    else
-                        enqueueTextMessage("Craft file not found: " + craft_name);
-                }
-
-            }
-            else
-            {
-                sendTextMessage(line);
+                    break;
+                default:
+                    EnqueueTextMessage("Unrecognized command: " + InputArgs[0]);
+                    break;
             }
         }
+        else
+            SendTextMessage(line);
     }
 
-    protected void handleConnection()
+    /* HandleConnection method needs a rewrite, unreliable */
+    protected void HandleConnection()
     {
         //Send a keep-alive message to prevent timeout
-        if (stopwatch.ElapsedMilliseconds - lastTCPMessageSendTime >= KEEPALIVE_DELAY)
-            sendMessageTCP(KLFCommon.ClientMessageID.KEEPALIVE, null);
-
-        if (udpSocket != null && handshakeCompleted)
+        if (ClientStopwatch.ElapsedMilliseconds - LastTcpMessageSendTime >= KeepAliveDelay)
+            SendMessageTcp(KLFCommon.ClientMessageID.KeepAlive, null);
+        if (UdpSocket != null && HandshakeComplete)
         {
-
             //Update the status of the udp connection
-            long last_udp_ack = 0;
-            long last_udp_send = 0;
-            lock (udpTimestampLock)
+            long lastUdpAck = 0;
+            long lastUdpSend = 0;
+            lock (UdpTimestampLock)
             {
-                last_udp_ack = lastUDPAckReceiveTime;
-                last_udp_send = lastUDPMessageSendTime;
+                lastUdpAck = LastUdpAckReceiveTime;
+                lastUdpSend = LastUdpMessageSendTime;
             }
-
-            bool udp_should_be_connected =
-                last_udp_ack > 0 && (stopwatch.ElapsedMilliseconds - last_udp_ack) < UDP_TIMEOUT_DELAY;
-
-            if (udpConnected != udp_should_be_connected)
+            bool udpShouldBeConnected = lastUdpAck > 0
+                && (ClientStopwatch.ElapsedMilliseconds - lastUdpAck) < UdpTimeoutDelay;
+            if (UdpConnected != udpShouldBeConnected)
             {
-                if (udp_should_be_connected)
-                    enqueueTextMessage("UDP connection established.", false, true);
+                if (udpShouldBeConnected)
+                    EnqueueTextMessage("Udp connection established.", false, true);
                 else
-                    enqueueTextMessage("UDP connection lost.", false, true);
-
-                udpConnected = udp_should_be_connected;
+                    EnqueueTextMessage("Udp connection lost.", false, true);
+                UdpConnected = udpShouldBeConnected;
             }
-
             //Send a probe message to try to establish a udp connection
-            if ((stopwatch.ElapsedMilliseconds - last_udp_send) > UDP_PROBE_DELAY)
-                sendUDPProbeMessage();
-
+            if ((ClientStopwatch.ElapsedMilliseconds - lastUdpSend) > UdpProbeDelay)
+                SendUdpProbeMessage();
         }
     }
 
     //Plugin Interop
-
-    public void throttledShareScreenshots()
+    public void ThrottledShareScreenshots()
     {
         //Throttle the rate at which you can share screenshots
-        if (stopwatch.ElapsedMilliseconds - lastScreenshotShareTime > screenshotInterval)
+        if (ClientStopwatch.ElapsedMilliseconds - LastScreenshotShareTime > ScreenshotInterval)
         {
-            lock (screenshotOutLock)
+            lock (ScreenshotOutLock)
             {
-                if (queuedOutScreenshot != null)
+                if (QueuedOutScreenshot != null)
                 {
                     //Share the screenshot
-                    sendShareScreenshotMesssage(queuedOutScreenshot);
-                    queuedOutScreenshot = null;
-                    lastScreenshotShareTime = stopwatch.ElapsedMilliseconds;
+                    SendShareScreenshotMessage(QueuedOutScreenshot);
+                    QueuedOutScreenshot = null;
+                    LastScreenshotShareTime = ClientStopwatch.ElapsedMilliseconds;
                 }
             }
         }
     }
 
-    protected void handleInteropMessage(int id, byte[] data)
+    protected void HandleInteropMessage(int id, byte[] data)
     {
-        handleInteropMessage((KLFCommon.PluginInteropMessageID)id, data);
+        HandleInteropMessage((KLFCommon.PluginInteropMessageID)id, data);
     }
 
-    protected void handleInteropMessage(KLFCommon.PluginInteropMessageID id, byte[] data)
+    protected void HandleInteropMessage(KLFCommon.PluginInteropMessageID id, byte[] data)
     {
         switch (id)
         {
-
-        case KLFCommon.PluginInteropMessageID.CHAT_SEND:
-
-            if (data != null)
-            {
-                String line = encoder.GetString(data);
-
-                InTextMessage message = new InTextMessage();
-                message.fromServer = false;
-                message.message = "[" + clientSettings.username + "] " + line;
-                enqueueTextMessage(message, false);
-
-                handleChatInput(line);
-            }
-
-            break;
-
-        case KLFCommon.PluginInteropMessageID.PLUGIN_DATA:
-
-            //String new_watch_player_name = String.Empty;
-
-            if (data != null && data.Length >= 9)
-            {
-                UnicodeEncoding encoder = new UnicodeEncoding();
-                int index = 0;
-
-                //Read current activity status
-                bool in_flight = data[index] != 0;
-                index++;
-
-                //Read current game title
-                int current_game_title_length = KLFCommon.intFromBytes(data, index);
-                index += 4;
-
-                currentGameTitle = encoder.GetString(data, index, current_game_title_length);
-                index += current_game_title_length;
-
-                //Send the activity status to the server
-                if (in_flight)
-                    sendMessageTCP(KLFCommon.ClientMessageID.ACTIVITY_UPDATE_IN_FLIGHT, null);
-                else
-                    sendMessageTCP(KLFCommon.ClientMessageID.ACTIVITY_UPDATE_IN_GAME, null);
-            }
-            break;
-
-        case KLFCommon.PluginInteropMessageID.PRIMARY_PLUGIN_UPDATE:
-            sendPluginUpdate(data, true);
-            break;
-
-        case KLFCommon.PluginInteropMessageID.SECONDARY_PLUGIN_UPDATE:
-            sendPluginUpdate(data, false);
-            break;
-
-        case KLFCommon.PluginInteropMessageID.SCREENSHOT_SHARE:
-
-            if (data != null)
-            {
-                lock (screenshotOutLock)
+            case KLFCommon.PluginInteropMessageID.ChatSend:
+                if (data != null)
                 {
-                    queuedOutScreenshot = data;
+                    String line = Encoder.GetString(data);
+                    InTextMessage message = new InTextMessage();
+                    message.FromServer = false;
+                    message.message = "[" + ClientConfiguration.Username + "] " + line;
+                    EnqueueTextMessage(message, false);
+                    HandleChatInput(line);
                 }
-            }
+                break;
 
-            break;
-
-        case KLFCommon.PluginInteropMessageID.SCREENSHOT_WATCH_UPDATE:
-            if (data != null && data.Length >= 8)
-            {
-                int index = KLFCommon.intFromBytes(data, 0);
-                int current_index = KLFCommon.intFromBytes(data, 4);
-                String name = encoder.GetString(data, 8, data.Length - 8);
-
-                if (watchPlayerName != name || watchPlayerIndex != index)
+            case KLFCommon.PluginInteropMessageID.PluginData:
+                //String new_watch_player_name = String.Empty;
+                if (data != null && data.Length >= 9)
                 {
-                    watchPlayerName = name;
-                    watchPlayerIndex = index;
-
-                    //Look in the screenshot cache for the requested screenshot
-                    Screenshot cached = getCachedScreenshot(watchPlayerIndex, watchPlayerName);
-                    if (cached != null)
-                        sendClientInteropMessage(KLFCommon.ClientInteropMessageID.SCREENSHOT_RECEIVE, cached.toByteArray());
-
-                    sendScreenshotWatchPlayerMessage((cached == null), current_index, watchPlayerIndex, watchPlayerName);
+                    int index = 0;
+                    //Read current activity status
+                    bool inFlight = data[index] != 0;
+                    index++;
+                    //Read current game title
+                    int CurrentGameTitleLength = KLFCommon.BytesToInt(data, index);
+                    index += 4;
+                    CurrentGameTitle = Encoder.GetString(data, index, CurrentGameTitleLength);
+                    index += CurrentGameTitleLength;
+                    //Send the activity status to the server
+                    if (inFlight)
+                        SendMessageTcp(KLFCommon.ClientMessageID.ActivityUpdateInFlight, null);
+                    else
+                        SendMessageTcp(KLFCommon.ClientMessageID.ActivityUpdateInFlight, null);
                 }
-            }
-            break;
+                break;
 
+            case KLFCommon.PluginInteropMessageID.PrimaryPluginUpdate:
+                SendPluginUpdate(data, true);
+                break;
+
+            case KLFCommon.PluginInteropMessageID.SecondaryPluginUpdate:
+                SendPluginUpdate(data, false);
+                break;
+
+            case KLFCommon.PluginInteropMessageID.ScreenshotShare:
+                if (data != null)
+                {
+                    lock (ScreenshotOutLock)
+                    {
+                        QueuedOutScreenshot = data;
+                    }
+                }
+                break;
+
+            case KLFCommon.PluginInteropMessageID.ScreenshotWatchUpdate:
+                if (data != null && data.Length >= 8)
+                {
+                    int index = KLFCommon.BytesToInt(data, 0);
+                    int currentIndex = KLFCommon.BytesToInt(data, 4);
+                    String name = Encoder.GetString(data, 8, data.Length - 8);
+                    if (WatchPlayerName != name || WatchPlayerIndex != index)
+                    {
+                        WatchPlayerName = name;
+                        WatchPlayerIndex = index;
+                        //Look in the screenshot cache for the requested screenshot
+                        Screenshot cached = getCachedScreenshot(WatchPlayerIndex, WatchPlayerName);
+                        if (cached != null)
+                            SendClientInteropMessage(KLFCommon.ClientInteropMessageID.ScreenshotReceive, cached.ToByteArray());
+                        SendScreenshotWatchPlayerMessage((cached == null), currentIndex, WatchPlayerIndex, WatchPlayerName);
+                    }
+                }
+                break;
         }
     }
 
-    protected abstract void sendClientInteropMessage(KLFCommon.ClientInteropMessageID id, byte[] data);
+    protected abstract void SendClientInteropMessage(KLFCommon.ClientInteropMessageID id, byte[] data);
 
-    protected byte[] encodeInteropMessage(int id, byte[] data)
+    protected byte[] EncodeInteropMessage(int id, byte[] data)
     {
-        int msg_data_length = 0;
+        int msgDataLength = 0;
         if (data != null)
-            msg_data_length = data.Length;
-
-        byte[] message_bytes = new byte[KLFCommon.INTEROP_MSG_HEADER_LENGTH + msg_data_length];
-
-        KLFCommon.intToBytes((int)id).CopyTo(message_bytes, 0);
-        KLFCommon.intToBytes(msg_data_length).CopyTo(message_bytes, 4);
+            msgDataLength = data.Length;
+        byte[] messageBytes = new byte[KLFCommon.InteropMessageHeaderLength + msgDataLength];
+        KLFCommon.IntToBytes((int)id).CopyTo(messageBytes, 0);
+        KLFCommon.IntToBytes(msgDataLength).CopyTo(messageBytes, 4);
         if (data != null)
-            data.CopyTo(message_bytes, KLFCommon.INTEROP_MSG_HEADER_LENGTH);
-
-        return message_bytes;
+            data.CopyTo(messageBytes, KLFCommon.InteropMessageHeaderLength);
+        return messageBytes;
     }
 
-    protected void writeClientData()
+    protected void WriteClientData()
     {
-
-        lock (clientDataLock)
+        lock (ClientDataLock)
         {
-
-            if (lastClientDataChangeTime > lastClientDataWriteTime
-                    || (stopwatch.ElapsedMilliseconds - lastClientDataWriteTime) > CLIENT_DATA_FORCE_WRITE_INTERVAL)
+            if (LastClientDataChangeTime > LastClientDataWriteTime
+            || (ClientStopwatch.ElapsedMilliseconds - LastClientDataWriteTime) > ClientDataForceWriteInterval)
             {
-                byte[] username_bytes = encoder.GetBytes(clientSettings.username);
-
+                byte[] usernameBytes = Encoder.GetBytes(ClientConfiguration.Username);
                 //Build client data array
-                byte[] bytes = new byte[9 + username_bytes.Length];
-
-                bytes[0] = inactiveShipsPerUpdate;
-                KLFCommon.intToBytes(screenshotSettings.maxHeight).CopyTo(bytes, 1);
-                KLFCommon.intToBytes(updateInterval).CopyTo(bytes, 5);
-                username_bytes.CopyTo(bytes, 9);
-
-                sendClientInteropMessage(KLFCommon.ClientInteropMessageID.CLIENT_DATA, bytes);
-
-                lastClientDataWriteTime = stopwatch.ElapsedMilliseconds;
+                byte[] bytes = new byte[9 + usernameBytes.Length];
+                bytes[0] = InactiveShipsPerUpdate;
+                KLFCommon.IntToBytes(ScreenshotConfiguration.MaxHeight).CopyTo(bytes, 1);
+                KLFCommon.IntToBytes(UpdateInterval).CopyTo(bytes, 5);
+                usernameBytes.CopyTo(bytes, 9);
+                SendClientInteropMessage(KLFCommon.ClientInteropMessageID.ClientData, bytes);
+                LastClientDataWriteTime = ClientStopwatch.ElapsedMilliseconds;
             }
         }
-
     }
 
-    protected void enqueueTextMessage(String message, bool from_server = false, bool to_plugin = true)
+    protected void EnqueueTextMessage(String message, bool FromServer = false, bool toPlugin = true)
     {
-        InTextMessage text_message = new InTextMessage();
-        text_message.message = message;
-        text_message.fromServer = from_server;
-        enqueueTextMessage(text_message, to_plugin);
+        InTextMessage textMessage = new InTextMessage();
+        textMessage.message = message;
+        textMessage.FromServer = FromServer;
+        EnqueueTextMessage(textMessage, toPlugin);
     }
 
-    protected virtual void enqueueTextMessage(InTextMessage message, bool to_plugin = true)
+    protected virtual void EnqueueTextMessage(InTextMessage message, bool toPlugin = true)
     {
-        if (to_plugin)
-        {
-            if (message.fromServer)
-                enqueuePluginChatMessage("[Server] " + message.message, false);
+        if (toPlugin)
+            if (message.FromServer)
+                EnqueuePluginChatMessage("[Server] " + message.message, false);
             else
-                enqueuePluginChatMessage(message.message);
-        }
+                EnqueuePluginChatMessage(message.message);
     }
 
-    protected void enqueuePluginChatMessage(String message, bool print = false)
+    protected void EnqueuePluginChatMessage(String message, bool print = false)
     {
-
-        sendClientInteropMessage(
-            KLFCommon.ClientInteropMessageID.CHAT_RECEIVE,
-            encoder.GetBytes(message)
-        );
-
-        if (print)
+        SendClientInteropMessage
+            ( KLFCommon.ClientInteropMessageID.ChatReceive
+            , Encoder.GetBytes(message)
+            );
+        if(print)
             Console.WriteLine(message);
     }
 
-    protected void safeDelete(String filename)
+    protected void SafeDelete(String filename)
     {
         if (File.Exists(filename))
         {
@@ -765,118 +629,90 @@ abstract class Client
             {
                 File.Delete(filename);
             }
-            catch (System.UnauthorizedAccessException)
-            {
-            }
-            catch (System.IO.IOException)
-            {
-            }
+            catch (System.UnauthorizedAccessException) {}
+            catch (System.IO.IOException) {}
         }
     }
 
-    protected String findCraftFilename(String craft_name, ref byte craft_type)
+    protected String FindCraftFilename(String craftName, ref byte craftType)
     {
-        String vab_filename = getCraftFilename(craft_name, KLFCommon.CRAFT_TYPE_VAB);
-
-        if (vab_filename != null && File.Exists(vab_filename))
+        String vabFilename = GetCraftFilename(craftName, KLFCommon.CraftTypeVab);
+        if (vabFilename != null && File.Exists(vabFilename))
         {
-
-            craft_type = KLFCommon.CRAFT_TYPE_VAB;
-            return vab_filename;
+            craftType = KLFCommon.CraftTypeVab;
+            return vabFilename;
         }
-
-        String sph_filename = getCraftFilename(craft_name, KLFCommon.CRAFT_TYPE_SPH);
-        if (sph_filename != null && File.Exists(sph_filename))
+        String sphFilename = GetCraftFilename(craftName, KLFCommon.CraftTypeSph);
+        if (sphFilename != null && File.Exists(sphFilename))
         {
-
-            craft_type = KLFCommon.CRAFT_TYPE_SPH;
-            return sph_filename;
+            craftType = KLFCommon.CraftTypeSph;
+            return sphFilename;
         }
-
         return null;
-
     }
 
-    protected String getCraftFilename(String craft_name, byte craft_type)
+    /* TODO improve filename filtering */
+    protected String GetCraftFilename(String craftName, byte craftType)
     {
         //Filter the craft name for illegal characters
-        String filtered_craft_name = KLFCommon.filteredFileName(craft_name.Replace('.', '_'));
-
-
+        String filteredCraftName = KLFCommon.FilteredFileName(craftName.Replace('.', '_'));
         String result="";
-
-        if (currentGameTitle.Length <= 0 || filtered_craft_name.Length <= 0)
-        {
-
-
+        if (CurrentGameTitle.Length <= 0 || filteredCraftName.Length <= 0)
             return null;
-        }
-
-        switch (craft_type)
+        switch (craftType)
         {
-        case KLFCommon.CRAFT_TYPE_VAB:
-            result= "saves/" + currentGameTitle + "/Ships/VAB/" + filtered_craft_name + CRAFT_FILE_EXTENSION;
+            case KLFCommon.CraftTypeVab:
+                result= "saves/" + CurrentGameTitle + "/Ships/VAB/" + filteredCraftName + CraftFileExtension;
+                return result;
 
-            return result;
-
-        case KLFCommon.CRAFT_TYPE_SPH:
-            result= "saves/" + currentGameTitle + "/Ships/SPH/" + filtered_craft_name + CRAFT_FILE_EXTENSION;
-
-            return result;
+            case KLFCommon.CraftTypeSph:
+                result= "saves/" + CurrentGameTitle + "/Ships/SPH/" + filteredCraftName + CraftFileExtension;
+                return result;
         }
-
         return null;
-
     }
 
-    protected void cacheScreenshot(Screenshot screenshot)
+    protected void CacheScreenshot(Screenshot screenshot)
     {
-        foreach (Screenshot cached_screenshot in cachedScreenshots)
-        {
-            if (cached_screenshot.index == screenshot.index && cached_screenshot.player == screenshot.player)
+        foreach (Screenshot cachedScreenshot in CachedScreenshots)
+            if (cachedScreenshot.Index == screenshot.Index && cachedScreenshot.Player == screenshot.Player)
                 return;
-        }
-
-        cachedScreenshots.Add(screenshot);
-        while (cachedScreenshots.Count > MAX_CACHED_SCREENSHOTS)
-            cachedScreenshots.RemoveAt(0);
+        CachedScreenshots.Add(screenshot);
+        while (CachedScreenshots.Count > MaxCachedScreenshots)
+            CachedScreenshots.RemoveAt(0);
     }
 
     protected Screenshot getCachedScreenshot(int index, string player)
     {
-        foreach (Screenshot cached_screenshot in cachedScreenshots)
-        {
-            if (cached_screenshot.index == index && cached_screenshot.player == player)
+        foreach (Screenshot cachedScreenshot in CachedScreenshots)
+            if (cachedScreenshot.Index == index && cachedScreenshot.Player == player)
             {
                 //Put the screenshot at the end of the list to keep it from being uncached a little longer
-                cachedScreenshots.Remove(cached_screenshot);
-                cachedScreenshots.Add(cached_screenshot);
-                return cached_screenshot;
+                CachedScreenshots.Remove(cachedScreenshot);
+                CachedScreenshots.Add(cachedScreenshot);
+                return cachedScreenshot;
             }
-        }
-
         return null;
     }
 
     //Messages
-
-    protected void beginAsyncRead()
+    protected void BeginAsyncRead()
     {
         try
         {
-            if (tcpClient != null)
+            if (TcpConnection != null)
             {
-                currentMessageHeaderIndex = 0;
-                currentMessageDataIndex = 0;
-                receiveIndex = 0;
-                receiveHandleIndex = 0;
-
-                tcpClient.GetStream().BeginRead(
-                    receiveBuffer,
-                    receiveIndex,
-                    receiveBuffer.Length - receiveIndex,
-                    asyncReceive,
-                    receiveBuffer);
+                CurrentMessageHeaderIndex = 0;
+                CurrentMessageDataIndex = 0;
+                ReceiveIndex = 0;
+                ReceiveHandleIndex = 0;
+                TcpConnection.GetStream().BeginRead
+                    ( ReceiveBuffer
+                    , ReceiveIndex
+                    , ReceiveBuffer.Length - ReceiveIndex
+                    , AsyncReceive
+                    , ReceiveBuffer
+                    );
             }
         }
         catch (InvalidOperationException)
@@ -887,25 +723,23 @@ abstract class Client
         }
     }
 
-    protected void asyncReceive(IAsyncResult result)
+    protected void AsyncReceive(IAsyncResult result)
     {
         try
         {
-            int read = tcpClient.GetStream().EndRead(result);
-
+            int read = TcpConnection.GetStream().EndRead(result);
             if (read > 0)
             {
-                receiveIndex += read;
-
-                handleReceive();
+                ReceiveIndex += read;
+                HandleReceive();
             }
-
-            tcpClient.GetStream().BeginRead(
-                receiveBuffer,
-                receiveIndex,
-                receiveBuffer.Length - receiveIndex,
-                asyncReceive,
-                receiveBuffer);
+            TcpConnection.GetStream().BeginRead
+                ( ReceiveBuffer
+                , ReceiveIndex
+                , ReceiveBuffer.Length - ReceiveIndex
+                , AsyncReceive
+                , ReceiveBuffer
+                );
         }
         catch (InvalidOperationException)
         {
@@ -916,262 +750,216 @@ abstract class Client
         catch (ThreadAbortException)
         {
         }
-
     }
 
-    protected void handleReceive()
+    protected void HandleReceive()
     {
-
-        while (receiveHandleIndex < receiveIndex)
+        while (ReceiveHandleIndex < ReceiveIndex)
         {
-
             //Read header bytes
-            if (currentMessageHeaderIndex < KLFCommon.MSG_HEADER_LENGTH)
+            if (CurrentMessageHeaderIndex < KLFCommon.MessageHeaderLength)
             {
                 //Determine how many header bytes can be read
-                int bytes_to_read = Math.Min(receiveIndex - receiveHandleIndex, KLFCommon.MSG_HEADER_LENGTH - currentMessageHeaderIndex);
-
+                int bytesToRead = Math.Min(ReceiveIndex - ReceiveHandleIndex, KLFCommon.MessageHeaderLength - CurrentMessageHeaderIndex);
                 //Read header bytes
-                Array.Copy(receiveBuffer, receiveHandleIndex, currentMessageHeader, currentMessageHeaderIndex, bytes_to_read);
-
+                Array.Copy(ReceiveBuffer, ReceiveHandleIndex, CurrentMessageHeader, CurrentMessageHeaderIndex, bytesToRead);
                 //Advance buffer indices
-                currentMessageHeaderIndex += bytes_to_read;
-                receiveHandleIndex += bytes_to_read;
-
+                CurrentMessageHeaderIndex += bytesToRead;
+                ReceiveHandleIndex += bytesToRead;
                 //Handle header
-                if (currentMessageHeaderIndex >= KLFCommon.MSG_HEADER_LENGTH)
+                if (CurrentMessageHeaderIndex >= KLFCommon.MessageHeaderLength)
                 {
-                    int id_int = KLFCommon.intFromBytes(currentMessageHeader, 0);
-
+                    int idInt = KLFCommon.BytesToInt(CurrentMessageHeader, 0);
                     //Make sure the message id section of the header is a valid value
-                    if (id_int >= 0 && id_int < Enum.GetValues(typeof(KLFCommon.ServerMessageID)).Length)
-                        currentMessageID = (KLFCommon.ServerMessageID)id_int;
+                    if(idInt >= 0
+                    && idInt < Enum.GetValues(typeof(KLFCommon.ServerMessageID)).Length)
+                        CurrentMessageID = (KLFCommon.ServerMessageID)idInt;
                     else
-                        currentMessageID = KLFCommon.ServerMessageID.NULL;
-
-                    int data_length = KLFCommon.intFromBytes(currentMessageHeader, 4);
-
-                    if (data_length > 0)
+                        CurrentMessageID = KLFCommon.ServerMessageID.Null;
+                    int dataLength = KLFCommon.BytesToInt(CurrentMessageHeader, 4);
+                    if (dataLength > 0)
                     {
                         //Init message data buffer
-                        currentMessageData = new byte[data_length];
-                        currentMessageDataIndex = 0;
+                        CurrentMessageData = new byte[dataLength];
+                        CurrentMessageDataIndex = 0;
                     }
                     else
                     {
-                        currentMessageData = null;
-                        //Handle received message
-                        messageReceived(currentMessageID, null);
-
-                        //Prepare for the next header read
-                        currentMessageHeaderIndex = 0;
+                        CurrentMessageData = null;
+                        MessageReceived(CurrentMessageID, null);
+                        CurrentMessageHeaderIndex = 0;//Prepare for the next header read
                     }
                 }
             }
-
-            if (currentMessageData != null)
+            if (CurrentMessageData != null)
             {
                 //Read data bytes
-                if (currentMessageDataIndex < currentMessageData.Length)
+                if (CurrentMessageDataIndex < CurrentMessageData.Length)
                 {
                     //Determine how many data bytes can be read
-                    int bytes_to_read = Math.Min(receiveIndex - receiveHandleIndex, currentMessageData.Length - currentMessageDataIndex);
-
+                    int bytesToRead = Math.Min(ReceiveIndex - ReceiveHandleIndex, CurrentMessageData.Length - CurrentMessageDataIndex);
                     //Read data bytes
-                    Array.Copy(receiveBuffer, receiveHandleIndex, currentMessageData, currentMessageDataIndex, bytes_to_read);
-
+                    Array.Copy(ReceiveBuffer, ReceiveHandleIndex, CurrentMessageData, CurrentMessageDataIndex, bytesToRead);
                     //Advance buffer indices
-                    currentMessageDataIndex += bytes_to_read;
-                    receiveHandleIndex += bytes_to_read;
-
+                    CurrentMessageDataIndex += bytesToRead;
+                    ReceiveHandleIndex += bytesToRead;
                     //Handle data
-                    if (currentMessageDataIndex >= currentMessageData.Length)
+                    if (CurrentMessageDataIndex >= CurrentMessageData.Length)
                     {
                         //Handle received message
-                        messageReceived(currentMessageID, currentMessageData);
-
-                        currentMessageData = null;
-
+                        MessageReceived(CurrentMessageID, CurrentMessageData);
+                        CurrentMessageData = null;
                         //Prepare for the next header read
-                        currentMessageHeaderIndex = 0;
+                        CurrentMessageHeaderIndex = 0;
                     }
                 }
             }
-
         }
-
         //Once all receive bytes have been handled, reset buffer indices to use the whole buffer again
-        receiveHandleIndex = 0;
-        receiveIndex = 0;
+        ReceiveHandleIndex = 0;
+        ReceiveIndex = 0;
     }
 
-    protected abstract void messageReceived(KLFCommon.ServerMessageID id, byte[] data);
+    protected abstract void MessageReceived(KLFCommon.ServerMessageID id, byte[] data);
 
-    protected void sendHandshakeMessage()
+    /* FormPacket -- Handshake */
+    protected void SendHandshakeMessage()
     {
-        //Encode username
-        byte[] username_bytes = encoder.GetBytes(clientSettings.username);
-        byte[] version_bytes = encoder.GetBytes(KLFCommon.PROGRAM_VERSION);
-
-        byte[] message_data = new byte[4 + username_bytes.Length + version_bytes.Length];
-
-        KLFCommon.intToBytes(username_bytes.Length).CopyTo(message_data, 0);
-        username_bytes.CopyTo(message_data, 4);
-        version_bytes.CopyTo(message_data, 4 + username_bytes.Length);
-
-        sendMessageTCP(KLFCommon.ClientMessageID.HANDSHAKE, message_data);
+        byte[] usernameBytes = Encoder.GetBytes(ClientConfiguration.Username);
+        byte[] versionBytes = Encoder.GetBytes(KLFCommon.ProgramVersion);
+        byte[] messageData = new byte[4 + usernameBytes.Length + versionBytes.Length];
+        KLFCommon.IntToBytes(usernameBytes.Length).CopyTo(messageData, 0);//zero offset to length of username
+        usernameBytes.CopyTo(messageData, 4);//offset to username
+        versionBytes.CopyTo(messageData, 4 + usernameBytes.Length);//dynamic offset to version
+        SendMessageTcp(KLFCommon.ClientMessageID.Handshake, messageData);
     }
 
-    protected void sendTextMessage(String message)
+    /* FormPacket -- TextMessage */
+    protected void SendTextMessage(String message)
     {
         //Encode message
-        byte[] message_bytes = encoder.GetBytes(message);
-
-        sendMessageTCP(KLFCommon.ClientMessageID.TEXT_MESSAGE, message_bytes);
+        byte[] messageBytes = Encoder.GetBytes(message);
+        SendMessageTcp(KLFCommon.ClientMessageID.TextMessage, messageBytes);
     }
 
-    protected void sendPluginUpdate(byte[] data, bool primary)
+    /* FormPacket -- PluginUpdate */
+    protected void SendPluginUpdate(byte[] data, bool primary)
     {
         if (data != null && data.Length > 0)
         {
             KLFCommon.ClientMessageID id
-                = primary ? KLFCommon.ClientMessageID.PRIMARY_PLUGIN_UPDATE : KLFCommon.ClientMessageID.SECONDARY_PLUGIN_UPDATE;
-
-
-            if (udpConnected)
-                sendMessageUDP(id, data);
+                = primary ? KLFCommon.ClientMessageID.PrimaryPluginUpdate : KLFCommon.ClientMessageID.SecondaryPluginUpdate;
+            if (UdpConnected)
+                SendMessageUdp(id, data);
             else
-                sendMessageTCP(id, data);
+                SendMessageTcp(id, data);
         }
     }
 
-    protected void sendShareScreenshotMesssage(byte[] data)
+    /* FormPacket -- ShareScreenShotMessage */
+    protected void SendShareScreenshotMessage(byte[] data)
     {
         if (data != null && data.Length > 0)
-            sendMessageTCP(KLFCommon.ClientMessageID.SCREENSHOT_SHARE, data);
+            SendMessageTcp(KLFCommon.ClientMessageID.ScreenshotShare, data);
     }
 
-    protected void sendScreenshotWatchPlayerMessage(bool send_screenshot, int current_index, int index, String name)
+    /* FormPacket -- ScreenshotWatchPlayerMessage */
+    protected void SendScreenshotWatchPlayerMessage(bool sendScreenshot, int currentIndex, int index, String name)
     {
-        byte[] name_bytes = encoder.GetBytes(name);
-
-        byte[] bytes = new byte[9 + name_bytes.Length];
-
-        bytes[0] = send_screenshot ? (byte)1 : (byte)0;
-        KLFCommon.intToBytes(index).CopyTo(bytes, 1);
-        KLFCommon.intToBytes(current_index).CopyTo(bytes, 5);
-        name_bytes.CopyTo(bytes, 9);
-
-        sendMessageTCP(KLFCommon.ClientMessageID.SCREEN_WATCH_PLAYER, bytes);
+        byte[] nameBytes = Encoder.GetBytes(name);
+        byte[] bytes = new byte[9 + nameBytes.Length];
+        bytes[0] = sendScreenshot ? (byte)1 : (byte)0;//TODO sendScreenshot?
+        KLFCommon.IntToBytes(index).CopyTo(bytes, 1);//TODO why index and currentIndex?
+        KLFCommon.IntToBytes(currentIndex).CopyTo(bytes, 5);
+        nameBytes.CopyTo(bytes, 9);//which name
+        SendMessageTcp(KLFCommon.ClientMessageID.ScreenWatchPlayer, bytes);
     }
 
-    protected void sendConnectionEndMessage(String message)
+    protected void SendConnectionEndMessage(String message)
     {
-        //Encode message
-        byte[] message_bytes = encoder.GetBytes(message);
-
-        sendMessageTCP(KLFCommon.ClientMessageID.CONNECTION_END, message_bytes);
+        byte[] messageBytes = Encoder.GetBytes(message);
+        SendMessageTcp(KLFCommon.ClientMessageID.ConnectionEnd, messageBytes);
     }
 
-    protected void sendShareCraftMessage(String craft_name, byte[] data, byte type)
+    protected void SendShareCraftMessage(String craftName, byte[] data, byte type)
     {
-        //Encode message
-        byte[] name_bytes = encoder.GetBytes(craft_name);
-
-        byte[] bytes = new byte[5 + name_bytes.Length + data.Length];
-
+        byte[] nameBytes = Encoder.GetBytes(craftName);
+        byte[] bytes = new byte[5 + nameBytes.Length + data.Length];
         //Check size of data to make sure it's not too large
-        if ((name_bytes.Length + data.Length) <= KLFCommon.MAX_CRAFT_FILE_BYTES)
+        if ((nameBytes.Length + data.Length) <= KLFCommon.MaxCraftFileBytes)
         {
-            //Copy data
-            bytes[0] = type;
-            KLFCommon.intToBytes(name_bytes.Length).CopyTo(bytes, 1);
-            name_bytes.CopyTo(bytes, 5);
-            data.CopyTo(bytes, 5 + name_bytes.Length);
-
-            sendMessageTCP(KLFCommon.ClientMessageID.SHARE_CRAFT_FILE, bytes);
+            bytes[0] = type;//first bytes toggles vab/sph
+            KLFCommon.IntToBytes(nameBytes.Length).CopyTo(bytes, 1);//length of craft name
+            nameBytes.CopyTo(bytes, 5);//craft name
+            data.CopyTo(bytes, 5 + nameBytes.Length);//dynamic offset to vessel data
+            SendMessageTcp(KLFCommon.ClientMessageID.ShareCraftFile, bytes);
         }
         else
-            enqueueTextMessage("Craft file is too large to send.", false, true);
-
-
+            EnqueueTextMessage("Craft file is too large to send.", false, true);
     }
 
-    protected void sendMessageTCP(KLFCommon.ClientMessageID id, byte[] data)
+    protected void SendMessageTcp(KLFCommon.ClientMessageID id, byte[] data)
     {
-        byte[] message_bytes = buildMessageByteArray(id, data);
-
-        lock (tcpSendLock)
+        byte[] messageBytes = BuildMessageByteArray(id, data);
+        lock (TcpSendLock)
         {
             try
             {
-                //Send message
-                tcpClient.GetStream().Write(message_bytes, 0, message_bytes.Length);
+                TcpConnection.GetStream().Write(messageBytes, 0, messageBytes.Length);
             }
-            catch (System.InvalidOperationException) { }
-            catch (System.IO.IOException) { }
-
+            catch (System.InvalidOperationException) {}
+            catch (System.IO.IOException) {}
         }
-
-        lastTCPMessageSendTime = stopwatch.ElapsedMilliseconds;
+        LastTcpMessageSendTime = ClientStopwatch.ElapsedMilliseconds;
     }
 
-    protected void sendUDPProbeMessage()
+    protected void SendUdpProbeMessage()
     {
-        sendMessageUDP(KLFCommon.ClientMessageID.UDP_PROBE, null);
+        SendMessageUdp(KLFCommon.ClientMessageID.UdpProbe, null);
     }
 
-    protected void sendMessageUDP(KLFCommon.ClientMessageID id, byte[] data)
+    protected void SendMessageUdp(KLFCommon.ClientMessageID id, byte[] data)
     {
-        if (udpSocket != null)
+        if (UdpSocket != null)
         {
-            //Send the packet
             try
             {
-                udpSocket.Send(buildMessageByteArray(id, data, KLFCommon.intToBytes(clientID)));
+                UdpSocket.Send(BuildMessageByteArray(id, data, KLFCommon.IntToBytes(ClientID)));
             }
             catch { }
-
-            lock (udpTimestampLock)
+            lock (UdpTimestampLock)
             {
-                lastUDPMessageSendTime = stopwatch.ElapsedMilliseconds;
+                LastUdpMessageSendTime = ClientStopwatch.ElapsedMilliseconds;
             }
-
         }
     }
 
-    protected byte[] buildMessageByteArray(KLFCommon.ClientMessageID id, byte[] data, byte[] prefix = null)
+    /* TODO what's this prefix business? */
+    protected byte[] BuildMessageByteArray(KLFCommon.ClientMessageID id, byte[] data, byte[] prefix = null)
     {
-        int prefix_length = 0;
-        if (prefix != null)
-            prefix_length = prefix.Length;
-
-        int msg_data_length = 0;
-        if (data != null)
-            msg_data_length = data.Length;
-
-        byte[] message_bytes = new byte[KLFCommon.MSG_HEADER_LENGTH + msg_data_length + prefix_length];
-
+        int prefixLength = 0;
+        if(prefix != null)
+            prefixLength = prefix.Length;
+        int msgDataLength = 0;
+        if(data != null)
+            msgDataLength = data.Length;
+        byte[] messageBytes =
+            new byte[KLFCommon.MessageHeaderLength + msgDataLength + prefixLength];
         int index = 0;
-
-        if (prefix != null)
+        if(prefix != null)
         {
-            prefix.CopyTo(message_bytes, index);
+            prefix.CopyTo(messageBytes, index);
             index += 4;
         }
-
-        KLFCommon.intToBytes((int)id).CopyTo(message_bytes, index);
+        KLFCommon.IntToBytes((int)id).CopyTo(messageBytes, index);
         index += 4;
-
-        KLFCommon.intToBytes(msg_data_length).CopyTo(message_bytes, index);
+        KLFCommon.IntToBytes(msgDataLength).CopyTo(messageBytes, index);
         index += 4;
-
         if (data != null)
         {
-            data.CopyTo(message_bytes, index);
+            data.CopyTo(messageBytes, index);
             index += data.Length;
         }
-
-        return message_bytes;
+        return messageBytes;
     }
 }

@@ -4,84 +4,82 @@ using System.Linq;
 using System.Text;
 
 
-namespace KLF {
-class PluginClient : Client
+namespace KLF
 {
-    public delegate void HandleInteropCallback(KLFCommon.ClientInteropMessageID id, byte[] data);
-
-    Queue<InteropMessage> interopInQueue;
-    Queue<InteropMessage> interopOutQueue;
-    Queue<ServerMessage> serverMessageQueue;
-
-    object serverMessageQueueLock = new object();
-
-    protected override void connectionStarted()
+    class PluginClient : Client
     {
-        interopInQueue = new Queue<InteropMessage>();
-        interopOutQueue = new Queue<InteropMessage>();
-        serverMessageQueue = new Queue<ServerMessage>();
-    }
+        public delegate void HandleInteropCallback(KLFCommon.ClientInteropMessageID id, byte[] data);
 
-    protected override void messageReceived(KLFCommon.ServerMessageID id, byte[] data)
-    {
-        ServerMessage message;
-        message.id = id;
-        message.data = data;
+        Queue<InteropMessage> InteropInQueue;
+        Queue<InteropMessage> InteropOutQueue;
+        Queue<ServerMessage> ServerMessageQueue;
 
-        lock (serverMessageQueueLock)
+        object ServerMessageQueueLock = new object();
+
+        protected override void ConnectionStarted()
         {
-            serverMessageQueue.Enqueue(message);
-        }
-    }
-
-    protected override void sendClientInteropMessage(KLFCommon.ClientInteropMessageID id, byte[] data)
-    {
-        InteropMessage message = new InteropMessage();
-        message.id = (int)id;
-        message.data = data;
-        interopOutQueue.Enqueue(message);
-    }
-
-    public void updateStep(HandleInteropCallback interop_callback)
-    {
-        if (!isConnected)
-            return;
-
-        while (interopInQueue.Count > 0)
-        {
-            InteropMessage message = interopInQueue.Dequeue();
-            handleInteropMessage(message.id, message.data);
+            InteropInQueue = new Queue<InteropMessage>();
+            InteropOutQueue = new Queue<InteropMessage>();
+            ServerMessageQueue = new Queue<ServerMessage>();
         }
 
-        lock (serverMessageQueueLock)
+        protected override void MessageReceived(KLFCommon.ServerMessageID id, byte[] data)
         {
-            //Handle received messages
-            while (serverMessageQueue.Count > 0)
+            ServerMessage message;
+            message.id = id;
+            message.data = data;
+
+            lock (ServerMessageQueueLock)
             {
-                ServerMessage message = serverMessageQueue.Dequeue();
-                handleMessage(message.id, message.data);
+                ServerMessageQueue.Enqueue(message);
             }
         }
 
-        throttledShareScreenshots();
-
-        writeClientData();
-
-        handleConnection();
-
-        while (interopOutQueue.Count > 0)
+        protected override void SendClientInteropMessage(KLFCommon.ClientInteropMessageID id, byte[] data)
         {
-            InteropMessage message = interopOutQueue.Dequeue();
-            interop_callback((KLFCommon.ClientInteropMessageID)message.id, message.data);
+            InteropMessage message = new InteropMessage();
+            message.id = (int)id;
+            message.data = data;
+            InteropOutQueue.Enqueue(message);
+        }
+
+        public void UpdateStep(HandleInteropCallback Interop_callback)
+        {
+            if (!IsConnected)
+                return;
+
+            while (InteropInQueue.Count > 0)
+            {
+                InteropMessage message = InteropInQueue.Dequeue();
+                HandleInteropMessage(message.id, message.data);
+            }
+
+            lock (ServerMessageQueueLock)
+            {
+                while (ServerMessageQueue.Count > 0)
+                {//Handle received messages
+                    ServerMessage message = ServerMessageQueue.Dequeue();
+                    HandleMessage(message.id, message.data);
+                }
+            }
+
+            ThrottledShareScreenshots();
+            WriteClientData();
+            HandleConnection();
+
+            while (InteropOutQueue.Count > 0)
+            {
+                InteropMessage message = InteropOutQueue.Dequeue();
+                Interop_callback((KLFCommon.ClientInteropMessageID)message.id, message.data);
+            }
+        }
+
+        public void enqueuePluginInteropMessage(KLFCommon.PluginInteropMessageID id, byte[] data)
+        {
+            InteropMessage message = new InteropMessage();
+            message.id = (int)id;
+            message.data = data;
+            InteropInQueue.Enqueue(message);
         }
     }
-
-    public void enqueuePluginInteropMessage(KLFCommon.PluginInteropMessageID id, byte[] data)
-    {
-        InteropMessage message = new InteropMessage();
-        message.id = (int)id;
-        message.data = data;
-        interopInQueue.Enqueue(message);
-    }
-}
 }

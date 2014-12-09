@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClientSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Servers>
+    <ServerProfile Default="true">
+      <Uri>net.tcp://ksp.gaterunner.com:2075</Uri>
+    </ServerProfile>
+    <ServerProfile Default="false">
+      <Uri>net.tcp://klf.general-physics.de:2075/</Uri>
+    </ServerProfile>
+    <ServerProfile Default="false">
+      <Uri>net.tcp://examplehost:5325/</Uri>
+    </ServerProfile>
+  </Servers>
+  <Username>testuser</Username>
+  <Token>2352-1345</Token>
+  <Reconnect>true</Reconnect>
+</ClientSettings>

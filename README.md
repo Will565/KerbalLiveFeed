@@ -1,21 +1,48 @@
-KerbalLiveFeed Plugin, Client, and Server v0.7.3
-Created by Alfred Lam
+# Kerbal LiveFeed
+
+Plugin, Client, and Server created by Alfred Lam (C) GNU GPLv3
 
 
-# Installation
+## Installation
 
 * Place KLFClient.exe in your KSP install folder.
 * Place KLF folder in your GameData folder.
 
 
 
-# How to use
+## Usage
 
-* Run KLFClient.exe while KSP is running and connect to a KLF server.
+* Run KLFClient.exe
+* Use the listed commands to configure username and server to connect.
+* Use KLFClient.exe to connect to a server.
+* Start KSP
+
+_MacOS/Linux users run in a new terminal:  TERM=ansi; mono KLFClient.exe_
 
 
 
-# Server Settings
+## Troubleshooting
+
+*  KLF Window missing in-game!
+
+   * Make sure the Plugin resides within the GameData directory:
+
+     >     GameData/KLF/Plugins/KerbalLiveFeed.dll
+
+*  Game crashes when trying to view screenshots.
+
+   * If using the Linux client you can modify the KSP binary to avoid a crash:
+
+     See [forums for more detail](http://forum.kerbalspaceprogram.com/threads/24529-The-Linux-compatibility-thread!?p=857019&viewfull=1#post857019)
+
+*  Random text and symbols instead of colour output in KLFClient.exe
+
+   * Before running the client, set the TERM environment variable to ansi:
+
+     >     TERM=ansi; mono KLFClient.exe
+
+
+## Server Settings
 
 * joinMessage
 
@@ -54,21 +81,14 @@ Created by Alfred Lam
 
 * screenshotHeight
 
-    The maximum height of the screenshots players share.  Between 135 to 540.
+    The maximum height of the screenshots players share.  Between 135 to 600.
     
     (Ideal values: 135, 144, 180, 270, 315, 360, 540)
 
 
+## Project Contributors
 
-# Recent Changes
-
-* 2013-12-18 Compatibility for KSP 0.23, version to 0.7.3
-
-
-
-# Project Contributors
-
-* Originally created by Alfred Lam
+* Alfred Lam (Original creator and license holder)
 * raad287 (nevermoto)
 * Worrom36
 * Cobryis
@@ -77,3 +97,5 @@ Created by Alfred Lam
 * descention
 * velusip
 * nobleleader13245
+* Stavell
+
