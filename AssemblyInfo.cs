@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("Kerbal LiveFeed")]
-[assembly: AssemblyDescription("Play alone, together.")]
+[assembly: AssemblyDescription("Why play alone when you can play alone together?")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("Kerbal LiveFeed")]
