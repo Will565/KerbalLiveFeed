@@ -40,8 +40,8 @@ namespace KLF
         public const int MaxInactiveVesselsPerUpdate = 8;
         public const int StatusArrayMinSize = 2;
         public const int MaxVesselNameLength = 32;
-        public const float VesselTimeoutDelay = 6.0f;
-        public const float IdleDelay = 120.0f;
+        public const float VesselTimeoutDelay = 30.0f;
+        public const float IdleDelay = 300.0f;
         public const float PluginDataWriteInterval = 5.0f;
         public const float GlobalSettingsSaveInterval = 10.0f;
 
@@ -77,7 +77,47 @@ namespace KLF
         private bool MappingChatKey = false;
         private bool MappingViewKey = false;
         private bool SharingScreenshot = false;
-
+        private string KSP_SC_Location = "At Space Center";
+   // Stock APP Toolbar - Stavell
+        private ApplicationLauncherButton KLF_Button = null;
+        private Texture2D KLF_button_on = new Texture2D(38, 38, TextureFormat.ARGB32, false);
+        private Texture2D KLF_button_off = new Texture2D(38, 38, TextureFormat.ARGB32, false);
+        private Texture2D KLF_button_alert = new Texture2D(38, 38, TextureFormat.ARGB32, false);
+        private Texture2D KLF_button_alert_1 = new Texture2D(38, 38, TextureFormat.ARGB32, false);
+        private Texture2D KLF_button_alert_2 = new Texture2D(38, 38, TextureFormat.ARGB32, false);
+        private int KLF_button_alert_anim = 0;
+        private bool KLF_Texture_Load = false;
+ 
+    private void OnGUIApplicationLauncherReady()
+     {
+      // Create the button in the KSP AppLauncher
+      if (!KLF_Texture_Load)
+       {
+            if (GameDatabase.Instance.ExistsTexture("KLF/Textures/KLF_ON")) KLF_button_on = GameDatabase.Instance.GetTexture("KLF/Textures/KLF_ON", false);
+            if (GameDatabase.Instance.ExistsTexture("KLF/Textures/KLF_OFF")) KLF_button_off = GameDatabase.Instance.GetTexture("KLF/Textures/KLF_OFF", false);
+            if (GameDatabase.Instance.ExistsTexture("KLF/Textures/KLF_ALERT")) KLF_button_alert = GameDatabase.Instance.GetTexture("KLF/Textures/KLF_ALERT", false);
+            if (GameDatabase.Instance.ExistsTexture("KLF/Textures/KLF_ALERT1")) KLF_button_alert_1 = GameDatabase.Instance.GetTexture("KLF/Textures/KLF_ALERT1", false);
+            if (GameDatabase.Instance.ExistsTexture("KLF/Textures/KLF_ALERT2")) KLF_button_alert_2 = GameDatabase.Instance.GetTexture("KLF/Textures/KLF_ALERT2", false);
+            KLF_Texture_Load = true;
+      }
+         if (KLF_Button == null)
+         {
+             KLF_Button = ApplicationLauncher.Instance.AddModApplication(GUIToggle, GUIToggle,
+             null, null,
+             null, null,
+             ApplicationLauncher.AppScenes.ALWAYS,
+             KLF_button_on);
+         }
+     }
+ 
+    private void GUIToggle()
+    {
+    KLFInfoDisplay.infoDisplayActive = !KLFInfoDisplay.infoDisplayActive;
+        if (KLFInfoDisplay.infoDisplayActive)
+        { KLF_Button.SetTexture(KLF_button_on); KLF_button_alert_anim = 0; }
+        else { KLF_Button.SetTexture(KLF_button_off); }
+    }
+        
         public bool GlobalUIToggle
         {
             get
@@ -95,7 +135,6 @@ namespace KLF
                     case GameScenes.SPACECENTER:
                     case GameScenes.EDITOR:
                     case GameScenes.FLIGHT:
-                    case GameScenes.SPH:
                     case GameScenes.TRACKSTATION:
                         return true;
                     default:
@@ -150,7 +189,34 @@ namespace KLF
                 KLFCameraScript script = PlanetariumCam.gameObject.AddComponent<KLFCameraScript>();
                 script.Manager = this;
             }
+            // Animate ALert Icon
+            if (KLF_button_alert_anim != 0)
+            {
+                switch (KLF_button_alert_anim)
+                {
+                    case 1:
+                        KLF_Button.SetTexture(KLF_button_alert);
+                        KLF_button_alert_anim = 2;
+                        break;
+                    case 2:
+                        KLF_Button.SetTexture(KLF_button_alert_1);
+                        KLF_button_alert_anim = 3;
+                        break;
+                    case 3:
+                        KLF_Button.SetTexture(KLF_button_alert_2);
+                        KLF_button_alert_anim = 4;
+                        break;
+                    case 4:
+                        KLF_Button.SetTexture(KLF_button_alert_1);
+                        KLF_button_alert_anim = 1;
+                        break;
 
+                    default:
+                        KLF_Button.SetTexture(KLF_button_alert);
+                        KLF_button_alert_anim = 1;
+                        break;
+                }
+            }
             //Handle all queued vessel updates
             while (VesselUpdateQueue.Count > 0)
                 HandleVesselUpdate(VesselUpdateQueue.Dequeue());
@@ -281,13 +347,10 @@ namespace KLF
                     switch (HighLogic.LoadedScene)
                     {
                     case GameScenes.SPACECENTER:
-                        statusArray[1] = "At Space Center";
+                        statusArray[1] = KSP_SC_Location;
                         break;
                     case GameScenes.EDITOR:
-                        statusArray[1] = "In Vehicle Assembly Building";
-                        break;
-                    case GameScenes.SPH:
-                        statusArray[1] = "In Space Plane Hangar";
+                        statusArray[1] = "In Assembly Building";
                         break;
                     case GameScenes.TRACKSTATION:
                         statusArray[1] = "At Tracking Station";
@@ -1059,9 +1122,21 @@ namespace KLF
 
         public void Awake()
         {//MonoBehaviour
+            GameEvents.onGUIApplicationLauncherReady.Add(OnGUIApplicationLauncherReady);
+            GameEvents.onGUIAdministrationFacilitySpawn.Add(SetLocationAdmin);
+            GameEvents.onGUIAstronautComplexSpawn.Add(SetLocationAstro);
+            GameEvents.onGUIMissionControlSpawn.Add(SetLocationMC);
+            GameEvents.onGUIRnDComplexSpawn.Add(SetLocationRD);
+
+            GameEvents.onGUIAdministrationFacilityDespawn.Add(SetLocationSC);
+            GameEvents.onGUIAstronautComplexDespawn.Add(SetLocationSC);
+            GameEvents.onGUIMissionControlDespawn.Add(SetLocationSC);
+            GameEvents.onGUIRnDComplexDespawn.Add(SetLocationSC);
+            
             DontDestroyOnLoad(this);
             CancelInvoke();
             InvokeRepeating("UpdateStep", 1 / 60.0f, 1 / 60.0f);
+            this.infoDisplayTitle = string.Format("Kerbal LiveFeed v{0} ({1})", KLFCommon.PROGRAM_VERSION, KLFGlobalSettings.instance.guiToggleKey);
 
             if(KSP.IO.File.Exists<KLFManager>(InteropClientFilename))
             {
@@ -1097,6 +1172,26 @@ namespace KLF
             catch (KSP.IO.IOException)
             {
             }
+        }
+        public void SetLocationSC()
+        {
+            KSP_SC_Location = "At Space Center";
+        }
+        public void SetLocationAdmin()
+        {
+            KSP_SC_Location = "In Administration";
+        }
+        public void SetLocationAstro()
+        {
+            KSP_SC_Location = "In Astronaut Complex";
+        }
+        public void SetLocationMC()
+        {
+            KSP_SC_Location = "In Mission Control";
+        }
+        public void SetLocationRD()
+        {
+            KSP_SC_Location = "In R&D Complex";
         }
 
         public void Update()
