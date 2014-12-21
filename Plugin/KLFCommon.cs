@@ -6,7 +6,7 @@ using System.Text;
 public class KLFCommon
 {
 
-    public const String ProgramVersion = "0.8.0";
+    public const String ProgramVersion = "0.8.9";
     public const Int32 FileFormatVersion = 8;
     public const Int32 NetProtocolVersion = 9;
     public const int MessageHeaderLength = 8;
